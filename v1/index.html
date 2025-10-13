@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cidade Sustentável – v1</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; background: #0e1116; color: #e6e8ee; }
+    header { padding: 12px 16px; background: #161a22; border-bottom: 1px solid #1f2530; }
+    main { display: grid; place-items: center; min-height: calc(100vh - 60px); padding: 16px; }
+    canvas { width: min(96vw, 1100px); height: auto; max-height: 70vh; background: linear-gradient(#7cc7ff, #cfeaff); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.05); }
+    .note { margin-top: 10px; color: #a3adc2; }
+  </style>
+  </head>
+<body>
+  <header>
+    <h2 style="margin:0">Cidade Sustentável – v1 (Base)</h2>
+  </header>
+  <main>
+    <canvas id="c" width="960" height="540"></canvas>
+    <div class="note">Versão inicial: céu, nuvens, edifícios e estrada. Sem interações.</div>
+  </main>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let t = 0;
+    const clouds = [0, 180, 360, 540, 720];
+    function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.closePath(); ctx.fill(); }
+    function frame() {
+      t += 16;
+      // sky
+      const grd = ctx.createLinearGradient(0,0,0,canvas.height);
+      grd.addColorStop(0,'#78b7ff'); grd.addColorStop(1,'#c6e0ff');
+      ctx.fillStyle = grd; ctx.fillRect(0,0,canvas.width,canvas.height);
+      // sun
+      ctx.fillStyle = '#ffb703'; circle(820 + Math.sin(t*0.0003)*20, 90, 26);
+      // clouds
+      ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.7;
+      for (let i=0;i<clouds.length;i++) {
+        const x = ((clouds[i] + t*0.03) % 1200) - 100; const y = 60 + i*18;
+        circle(x, y, 20); circle(x+24, y-6, 16); circle(x+46, y, 22);
+      }
+      ctx.globalAlpha = 1;
+      // ground
+      ctx.fillStyle = '#7a8a99'; ctx.fillRect(0,420,canvas.width,120);
+      // road
+      ctx.fillStyle = '#444c5a'; ctx.fillRect(0,440,canvas.width,60);
+      // dashes
+      ctx.strokeStyle='#cfd7e6'; ctx.setLineDash([18,14]); ctx.lineWidth=3; ctx.beginPath();
+      ctx.moveTo(-(t/8%32),470); ctx.lineTo(canvas.width,470); ctx.stroke(); ctx.setLineDash([]);
+      // buildings
+      const buildings=[{x:60,w:120,h:180},{x:210,w:90,h:220},{x:320,w:150,h:200},{x:500,w:110,h:230},{x:650,w:140,h:190}];
+      const colors=['#445066','#384356','#2f3848'];
+      buildings.forEach((b,i)=>{ ctx.fillStyle=colors[i%3]; ctx.fillRect(b.x,420-b.h,b.w,b.h); });
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
+
