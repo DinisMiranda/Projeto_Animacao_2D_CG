@@ -21,7 +21,7 @@
 </head>
 <body>
     <!-- Canvas onde será desenhada a cidade -->
-    <canvas id="canvas" width="800" height="600"></canvas>
+    <canvas id="canvas" width="1100" height="600"></canvas>
     
     <script>
         // Obtém referências ao canvas e seu contexto 2D
@@ -33,79 +33,123 @@
         ctx.beginPath();                  // Inicia um novo path
         ctx.moveTo(0, 0);                // Move para o canto superior esquerdo
         ctx.lineTo(canvas.width, 0);     // Linha até o canto superior direito
-        ctx.lineTo(canvas.width, 350);   // Linha até o canto inferior direito (altura do céu)
-        ctx.lineTo(0, 350);              // Linha até o canto inferior esquerdo
+        ctx.lineTo(canvas.width, 420);   // Linha até o canto inferior direito (mais céu)
+        ctx.lineTo(0, 420);              // Linha até o canto inferior esquerdo
         ctx.closePath();                 // Fecha o path conectando ao ponto inicial
         
         // Cria gradiente linear do azul claro para azul mais claro
-        const grd = ctx.createLinearGradient(0, 0, 0, 350);
+        const grd = ctx.createLinearGradient(0, 0, 0, 420);
         grd.addColorStop(0, '#78b7ff');  // Azul no topo
         grd.addColorStop(1, '#c6e0ff');  // Azul mais claro na parte inferior
         ctx.fillStyle = grd;             // Define o gradiente como cor de preenchimento
         ctx.fill();                      // Preenche o path com o gradiente
         
         // ===== DESENHANDO O SOL =====
-        // Cria um círculo para o sol usando arc dentro de um path
-        ctx.beginPath();                 // Inicia novo path para o sol
-        ctx.arc(700, 80, 26, 0, Math.PI * 2);  // Círculo: x=700, y=80, raio=26, ângulo completo
-        ctx.closePath();                 // Fecha o path
-        ctx.fillStyle = '#ffb703';       // Cor laranja para o sol
-        ctx.fill();                      // Preenche o círculo
+        // Cria um sol com gradiente e brilho usando paths
+        const sunX = 900, sunY = 120, sunRadius = 26;
+        
+        // Sombra/brilho externo do sol
+        ctx.shadowColor = 'rgba(255, 183, 3, 0.4)';
+        ctx.shadowBlur = 20;
+        
+        // Círculo principal do sol com gradiente radial
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
+        ctx.closePath();
+        
+        // Gradiente radial do amarelo claro para laranja
+        const sunGradient = ctx.createRadialGradient(sunX - 8, sunY - 8, 0, sunX, sunY, sunRadius);
+        sunGradient.addColorStop(0, '#ffeb3b');    // Amarelo claro no centro
+        sunGradient.addColorStop(0.7, '#ffb703');  // Laranja no meio
+        sunGradient.addColorStop(1, '#ff8f00');    // Laranja escuro na borda
+        
+        ctx.fillStyle = sunGradient;
+        ctx.fill();
+        
+        // Remove sombra para o brilho interno
+        ctx.shadowBlur = 0;
+        
+        // Brilho interno (círculo menor e mais claro)
+        ctx.beginPath();
+        ctx.arc(sunX - 8, sunY - 8, sunRadius * 0.4, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fill();
         
         // ===== DESENHANDO AS NUVENS =====
-        ctx.fillStyle = '#fff';          // Cor branca para as nuvens
-        ctx.globalAlpha = 0.7;           // Define transparência (70% opaco)
-        
-        // Array com posições das nuvens (cada nuvem tem x e y)
+        // Função utilitária para desenhar uma nuvem fofa com múltiplas "bolhas" usando paths
+        function drawCloud(x, y, scale) {
+            ctx.save();                   // Salva o estado atual do contexto
+            
+            // Aplica transformações: move para posição (x,y) e redimensiona
+            ctx.translate(x, y);          // Move o ponto de origem para (x, y)
+            ctx.scale(scale, scale);      // Aplica escala para variar tamanho das nuvens
+            
+            // Configura sombra suave ao redor da nuvem para efeito de volume
+            ctx.shadowColor = 'rgba(255,255,255,0.6)';  // Cor da sombra (branco semi-transparente)
+            ctx.shadowBlur = 12;          // Intensidade do blur da sombra
+            
+            // Desenha o corpo principal da nuvem usando 5 círculos sobrepostos
+            ctx.fillStyle = 'rgba(255,255,255,0.92)';  // Branco quase opaco para a nuvem
+            ctx.beginPath();
+            // Círculo central (maior)
+            ctx.arc(0, 0, 20, 0, Math.PI * 2);
+            // Círculo da direita (médio)
+            ctx.arc(28, -2, 18, 0, Math.PI * 2);
+            // Círculo da direita (maior)
+            ctx.arc(52, 2, 22, 0, Math.PI * 2);
+            // Círculo superior esquerdo (pequeno)
+            ctx.arc(18, -14, 16, 0, Math.PI * 2);
+            // Círculo superior direito (pequeno)
+            ctx.arc(40, -16, 15, 0, Math.PI * 2);
+            ctx.closePath();              // Fecha o path
+            ctx.fill();                   // Preenche todos os círculos juntos
+            
+            // Remove sombra para o destaque interno
+            ctx.shadowBlur = 0;           // Remove blur da sombra
+            
+            // Desenha destaque suave no topo para dar sensação de volume
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';  // Branco mais transparente para highlight
+            ctx.beginPath();
+            // Dois círculos pequenos no topo para simular reflexo de luz
+            ctx.arc(20, -14, 10, 0, Math.PI * 2);
+            ctx.arc(38, -16, 9, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.restore();                // Restaura o estado anterior do contexto
+        }
+
+        // Array com posições e escalas das nuvens (ajustadas ao novo céu 1100x420)
         const cloudPositions = [
-            {x: 100, y: 50},             // Nuvem 1
-            {x: 280, y: 68},             // Nuvem 2
-            {x: 460, y: 86},             // Nuvem 3
-            {x: 640, y: 104},            // Nuvem 4
-            {x: 50, y: 122}              // Nuvem 5
+            {x: 140, y: 100, s: 1.0},    // Nuvem 1: tamanho normal
+            {x: 360, y: 120, s: 0.95},   // Nuvem 2: ligeiramente menor
+            {x: 560, y: 105, s: 1.05},   // Nuvem 3: ligeiramente maior
+            {x: 760, y: 130, s: 1.0},    // Nuvem 4: tamanho normal
+            {x: 980, y: 145, s: 0.9}     // Nuvem 5: menor (próxima ao sol)
         ];
-        
-        // Para cada posição de nuvem, desenha 3 círculos para formar a nuvem
-        cloudPositions.forEach(pos => {
-            // Círculo principal da nuvem
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fill();
-            
-            // Segundo círculo (menor, mais acima)
-            ctx.beginPath();
-            ctx.arc(pos.x + 24, pos.y - 6, 16, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fill();
-            
-            // Terceiro círculo (maior, na direita)
-            ctx.beginPath();
-            ctx.arc(pos.x + 46, pos.y, 22, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fill();
-        });
-        
-        ctx.globalAlpha = 1;             // Restaura opacidade total
+
+        // Desenha cada nuvem na sua posição com sua escala específica
+        cloudPositions.forEach(c => drawCloud(c.x, c.y, c.s));
         
         // ===== DESENHANDO O CHÃO =====
-        // Cria um retângulo para o chão usando moveTo e lineTo
+        // Cria um retângulo para o chão usando moveTo e lineTo (metade da altura, alinhado ao novo horizonte)
         ctx.beginPath();
-        ctx.moveTo(0, 350);              // Move para o início do chão
-        ctx.lineTo(canvas.width, 350);   // Linha até o final da largura
-        ctx.lineTo(canvas.width, canvas.height);  // Linha até o canto inferior direito
-        ctx.lineTo(0, canvas.height);    // Linha até o canto inferior esquerdo
+        ctx.moveTo(0, 420);              // Novo início do chão (horizonte mais baixo)
+        ctx.lineTo(canvas.width, 420);   // Linha até o final da largura
+        ctx.lineTo(canvas.width, 545);   // Metade da altura do chão (420 + 125)
+        ctx.lineTo(0, 545);              // Linha até o canto inferior esquerdo
         ctx.closePath();                 // Fecha o path
         ctx.fillStyle = '#7a8a99';       // Cor cinza para o chão
         ctx.fill();                      // Preenche o chão
         
         // ===== DESENHANDO A ESTRADA =====
-        // Cria um retângulo para a estrada
+        // Cria um retângulo para a estrada (mais baixa)
         ctx.beginPath();
-        ctx.moveTo(0, 370);              // Início da estrada (20px abaixo do chão)
-        ctx.lineTo(canvas.width, 370);   // Linha até o final da largura
-        ctx.lineTo(canvas.width, 430);   // Linha até a altura inferior da estrada
-        ctx.lineTo(0, 430);              // Linha de volta ao início
+        ctx.moveTo(0, 470);              // Início da estrada (50px abaixo do início do chão)
+        ctx.lineTo(canvas.width, 470);   // Linha até o final da largura
+        ctx.lineTo(canvas.width, 530);   // Linha até a altura inferior da estrada
+        ctx.lineTo(0, 530);              // Linha de volta ao início
         ctx.closePath();                 // Fecha o path
         ctx.fillStyle = '#444c5a';       // Cor cinza escura para a estrada
         ctx.fill();                      // Preenche a estrada
@@ -115,19 +159,19 @@
         ctx.setLineDash([18, 14]);       // Define padrão de linha tracejada (18px linha, 14px espaço)
         ctx.lineWidth = 3;               // Espessura da linha
         ctx.beginPath();
-        ctx.moveTo(0, 400);              // Início da linha no centro da estrada
-        ctx.lineTo(canvas.width, 400);   // Linha até o final da estrada
+        ctx.moveTo(0, 500);              // Início da linha no centro da estrada
+        ctx.lineTo(canvas.width, 500);   // Linha até o final da estrada
         ctx.stroke();                    // Desenha a linha tracejada
         ctx.setLineDash([]);             // Remove o padrão tracejado para próximos desenhos
         
         // ===== DESENHANDO OS EDIFÍCIOS =====
         // Array com dados dos edifícios (posição x, largura, altura)
         const buildings = [
-            {x: 50, w: 100, h: 150},     // Edifício 1
-            {x: 170, w: 80, h: 180},     // Edifício 2
-            {x: 270, w: 120, h: 160},    // Edifício 3
-            {x: 410, w: 90, h: 190},     // Edifício 4
-            {x: 520, w: 110, h: 140}     // Edifício 5
+            {x: 80,  w: 120, h: 180},    // Edifício 1 (mais largo e alto)
+            {x: 230, w: 100, h: 220},    // Edifício 2
+            {x: 380, w: 160, h: 200},    // Edifício 3
+            {x: 560, w: 130, h: 240},    // Edifício 4
+            {x: 760, w: 150, h: 190}     // Edifício 5
         ];
         // Array com cores para os edifícios (alterna entre 3 cores)
         const colors = ['#445066', '#384356', '#2f3848'];
@@ -135,10 +179,10 @@
         // Para cada edifício, desenha um retângulo usando moveTo e lineTo
         buildings.forEach((building, i) => {
             ctx.beginPath();             // Inicia path para o edifício
-            ctx.moveTo(building.x, 350); // Move para a base do edifício
-            ctx.lineTo(building.x + building.w, 350);  // Linha até a base direita
-            ctx.lineTo(building.x + building.w, 350 - building.h);  // Linha até o topo direito
-            ctx.lineTo(building.x, 350 - building.h);  // Linha até o topo esquerdo
+            ctx.moveTo(building.x, 420); // Base do edifício alinhada ao novo chão
+            ctx.lineTo(building.x + building.w, 420);  // Linha até a base direita
+            ctx.lineTo(building.x + building.w, 420 - building.h);  // Linha até o topo direito
+            ctx.lineTo(building.x, 420 - building.h);  // Linha até o topo esquerdo
             ctx.closePath();             // Fecha o path
             ctx.fillStyle = colors[i % 3];  // Usa cor baseada no índice (alterna entre 3 cores)
             ctx.fill();                  // Preenche o edifício
