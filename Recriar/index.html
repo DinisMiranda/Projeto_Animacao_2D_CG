@@ -12,14 +12,43 @@
             margin: 0;                    /* Remove margens padrão do navegador */
             padding: 0;                   /* Remove padding padrão do navegador */
             display: flex;                /* Transforma o body em container flexbox */
+            flex-direction: column;       /* Organiza elementos verticalmente */
             justify-content: center;      /* Centraliza horizontalmente */
             align-items: center;          /* Centraliza verticalmente */
             min-height: 100vh;           /* Garante altura mínima da viewport */
             background-color: #333333;    /* Fundo cinza escuro */
         }
+        
+        #checkbox-container {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+        
+        #checkbox-container label {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        
+        #checkbox-container input[type="checkbox"] {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
+    <!-- Checkbox para mostrar painéis solares -->
+    <div id="checkbox-container">
+        <label>
+            <input type="checkbox" id="showPanels"> Mostrar Painéis Solares
+        </label>
+    </div>
+    
     <!-- Canvas onde será desenhada a cidade -->
     <canvas id="canvas" width="1100" height="600"></canvas>
     
@@ -27,144 +56,8 @@
         // Obtém referências ao canvas e seu contexto 2D
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const showPanelsCheckbox = document.getElementById('showPanels');
         
-        // ===== DESENHANDO O CÉU COM GRADIENTE =====
-        // Cria um path retangular para o céu usando moveTo e lineTo
-        ctx.beginPath();                  // Inicia um novo path
-        ctx.moveTo(0, 0);                // Move para o canto superior esquerdo
-        ctx.lineTo(canvas.width, 0);     // Linha até o canto superior direito
-        ctx.lineTo(canvas.width, 420);   // Linha até o canto inferior direito (mais céu)
-        ctx.lineTo(0, 420);              // Linha até o canto inferior esquerdo
-        ctx.closePath();                 // Fecha o path conectando ao ponto inicial
-        
-        // Cria gradiente linear do azul claro para azul mais claro
-        const grd = ctx.createLinearGradient(0, 0, 0, 420);
-        grd.addColorStop(0, '#78b7ff');  // Azul no topo
-        grd.addColorStop(1, '#c6e0ff');  // Azul mais claro na parte inferior
-        ctx.fillStyle = grd;             // Define o gradiente como cor de preenchimento
-        ctx.fill();                      // Preenche o path com o gradiente
-        
-        // ===== DESENHANDO O SOL =====
-        // Cria um sol com gradiente e brilho usando paths
-        const sunX = 900, sunY = 120, sunRadius = 26;
-        
-        // Sombra/brilho externo do sol
-        ctx.shadowColor = 'rgba(255, 183, 3, 0.4)';
-        ctx.shadowBlur = 20;
-        
-        // Círculo principal do sol com gradiente radial
-        ctx.beginPath();
-        ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
-        ctx.closePath();
-        
-        // Gradiente radial do amarelo claro para laranja
-        const sunGradient = ctx.createRadialGradient(sunX - 8, sunY - 8, 0, sunX, sunY, sunRadius);
-        sunGradient.addColorStop(0, '#ffeb3b');    // Amarelo claro no centro
-        sunGradient.addColorStop(0.7, '#ffb703');  // Laranja no meio
-        sunGradient.addColorStop(1, '#ff8f00');    // Laranja escuro na borda
-        
-        ctx.fillStyle = sunGradient;
-        ctx.fill();
-        
-        // Remove sombra para o brilho interno
-        ctx.shadowBlur = 0;
-        
-        // Brilho interno (círculo menor e mais claro)
-        ctx.beginPath();
-        ctx.arc(sunX - 8, sunY - 8, sunRadius * 0.4, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.fill();
-        
-        // ===== DESENHANDO AS NUVENS =====
-        // Função utilitária para desenhar uma nuvem fofa com múltiplas "bolhas" usando paths
-        function drawCloud(x, y, scale) {
-            ctx.save();                   // Salva o estado atual do contexto
-            
-            // Aplica transformações: move para posição (x,y) e redimensiona
-            ctx.translate(x, y);          // Move o ponto de origem para (x, y)
-            ctx.scale(scale, scale);      // Aplica escala para variar tamanho das nuvens
-            
-            // Configura sombra suave ao redor da nuvem para efeito de volume
-            ctx.shadowColor = 'rgba(255,255,255,0.6)';  // Cor da sombra (branco semi-transparente)
-            ctx.shadowBlur = 12;          // Intensidade do blur da sombra
-            
-            // Desenha o corpo principal da nuvem usando 5 círculos sobrepostos
-            ctx.fillStyle = 'rgba(255,255,255,0.92)';  // Branco quase opaco para a nuvem
-            ctx.beginPath();
-            // Círculo central (maior)
-            ctx.arc(0, 0, 20, 0, Math.PI * 2);
-            // Círculo da direita (médio)
-            ctx.arc(28, -2, 18, 0, Math.PI * 2);
-            // Círculo da direita (maior)
-            ctx.arc(52, 2, 22, 0, Math.PI * 2);
-            // Círculo superior esquerdo (pequeno)
-            ctx.arc(18, -14, 16, 0, Math.PI * 2);
-            // Círculo superior direito (pequeno)
-            ctx.arc(40, -16, 15, 0, Math.PI * 2);
-            ctx.closePath();              // Fecha o path
-            ctx.fill();                   // Preenche todos os círculos juntos
-            
-            // Remove sombra para o destaque interno
-            ctx.shadowBlur = 0;           // Remove blur da sombra
-            
-            // Desenha destaque suave no topo para dar sensação de volume
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';  // Branco mais transparente para highlight
-            ctx.beginPath();
-            // Dois círculos pequenos no topo para simular reflexo de luz
-            ctx.arc(20, -14, 10, 0, Math.PI * 2);
-            ctx.arc(38, -16, 9, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fill();
-            
-            ctx.restore();                // Restaura o estado anterior do contexto
-        }
-
-        // Array com posições e escalas das nuvens (ajustadas ao novo céu 1100x420)
-        const cloudPositions = [
-            {x: 140, y: 100, s: 1.0},    // Nuvem 1: tamanho normal
-            {x: 360, y: 120, s: 0.95},   // Nuvem 2: ligeiramente menor
-            {x: 560, y: 105, s: 1.05},   // Nuvem 3: ligeiramente maior
-            {x: 760, y: 130, s: 1.0},    // Nuvem 4: tamanho normal
-            {x: 980, y: 145, s: 0.9}     // Nuvem 5: menor (próxima ao sol)
-        ];
-
-        // Desenha cada nuvem na sua posição com sua escala específica
-        cloudPositions.forEach(c => drawCloud(c.x, c.y, c.s));
-        
-        // ===== DESENHANDO O CHÃO =====
-        // Cria um retângulo para o chão usando moveTo e lineTo (metade da altura, alinhado ao novo horizonte)
-        ctx.beginPath();
-        ctx.moveTo(0, 420);              // Novo início do chão (horizonte mais baixo)
-        ctx.lineTo(canvas.width, 420);   // Linha até o final da largura
-        ctx.lineTo(canvas.width, 545);   // Metade da altura do chão (420 + 125)
-        ctx.lineTo(0, 545);              // Linha até o canto inferior esquerdo
-        ctx.closePath();                 // Fecha o path
-        ctx.fillStyle = '#7a8a99';       // Cor cinza para o chão
-        ctx.fill();                      // Preenche o chão
-        
-        // ===== DESENHANDO A ESTRADA =====
-        // Cria um retângulo para a estrada (mais baixa)
-        ctx.beginPath();
-        ctx.moveTo(0, 470);              // Início da estrada (50px abaixo do início do chão)
-        ctx.lineTo(canvas.width, 470);   // Linha até o final da largura
-        ctx.lineTo(canvas.width, 530);   // Linha até a altura inferior da estrada
-        ctx.lineTo(0, 530);              // Linha de volta ao início
-        ctx.closePath();                 // Fecha o path
-        ctx.fillStyle = '#444c5a';       // Cor cinza escura para a estrada
-        ctx.fill();                      // Preenche a estrada
-        
-        // ===== DESENHANDO AS LINHAS DA ESTRADA =====
-        ctx.strokeStyle = '#cfd7e6';     // Cor branca para as linhas
-        ctx.setLineDash([18, 14]);       // Define padrão de linha tracejada (18px linha, 14px espaço)
-        ctx.lineWidth = 3;               // Espessura da linha
-        ctx.beginPath();
-        ctx.moveTo(0, 500);              // Início da linha no centro da estrada
-        ctx.lineTo(canvas.width, 500);   // Linha até o final da estrada
-        ctx.stroke();                    // Desenha a linha tracejada
-        ctx.setLineDash([]);             // Remove o padrão tracejado para próximos desenhos
-        
-        // ===== DESENHANDO OS EDIFÍCIOS =====
         // Array com dados dos edifícios (posição x, largura, altura)
         const buildings = [
             {x: 80,  w: 120, h: 180},    // Edifício 1 (mais largo e alto)
@@ -173,20 +66,474 @@
             {x: 560, w: 130, h: 240},    // Edifício 4
             {x: 760, w: 150, h: 190}     // Edifício 5
         ];
+        
         // Array com cores para os edifícios (alterna entre 3 cores)
         const colors = ['#445066', '#384356', '#2f3848'];
         
-        // Para cada edifício, desenha um retângulo usando moveTo e lineTo
-        buildings.forEach((building, i) => {
-            ctx.beginPath();             // Inicia path para o edifício
-            ctx.moveTo(building.x, 420); // Base do edifício alinhada ao novo chão
-            ctx.lineTo(building.x + building.w, 420);  // Linha até a base direita
-            ctx.lineTo(building.x + building.w, 420 - building.h);  // Linha até o topo direito
-            ctx.lineTo(building.x, 420 - building.h);  // Linha até o topo esquerdo
-            ctx.closePath();             // Fecha o path
-            ctx.fillStyle = colors[i % 3];  // Usa cor baseada no índice (alterna entre 3 cores)
-            ctx.fill();                  // Preenche o edifício
+        // Array com posições e escalas das nuvens
+        const cloudPositions = [
+            {x: 140, y: 100, s: 1.0},    // Nuvem 1: tamanho normal
+            {x: 360, y: 120, s: 0.95},   // Nuvem 2: ligeiramente menor
+            {x: 560, y: 105, s: 1.05},   // Nuvem 3: ligeiramente maior
+            {x: 760, y: 130, s: 1.0},    // Nuvem 4: tamanho normal
+            {x: 980, y: 145, s: 0.9}     // Nuvem 5: menor (próxima ao sol)
+        ];
+        
+        // Criar painéis solares (um para cada edifício)
+        // Inicialmente posicionados na parte inferior do canvas
+        const solarPanels = buildings.map((building, i) => {
+            const panelWidth = building.w * 0.8;  // Largura proporcional ao edifício
+            const panelHeight = 40;                // Altura fixa
+            const startX = 100 + i * 200;          // Espaçamento horizontal
+            const startY = canvas.height - 30;     // Posição na parte inferior
+            
+            return {
+                x: startX,
+                y: startY,
+                width: panelWidth,
+                height: panelHeight,
+                buildingIndex: i,
+                isDragging: false,
+                dragOffsetX: 0,
+                dragOffsetY: 0
+            };
         });
+        
+        // Variáveis para controle de drag
+        let draggedPanel = null;
+        
+        // ===== FUNÇÃO PARA DESENHAR O CÉU =====
+        function drawSky() {
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(canvas.width, 0);
+            ctx.lineTo(canvas.width, 420);
+            ctx.lineTo(0, 420);
+            ctx.closePath();
+            
+            const grd = ctx.createLinearGradient(0, 0, 0, 420);
+            grd.addColorStop(0, '#78b7ff');
+            grd.addColorStop(1, '#c6e0ff');
+            ctx.fillStyle = grd;
+            ctx.fill();
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR O SOL =====
+        function drawSun() {
+            const sunX = 900, sunY = 120, sunRadius = 26;
+            
+            ctx.shadowColor = 'rgba(255, 183, 3, 0.4)';
+            ctx.shadowBlur = 20;
+            
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
+            ctx.closePath();
+            
+            const sunGradient = ctx.createRadialGradient(sunX - 8, sunY - 8, 0, sunX, sunY, sunRadius);
+            sunGradient.addColorStop(0, '#ffeb3b');
+            sunGradient.addColorStop(0.7, '#ffb703');
+            sunGradient.addColorStop(1, '#ff8f00');
+            
+            ctx.fillStyle = sunGradient;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            ctx.beginPath();
+            ctx.arc(sunX - 8, sunY - 8, sunRadius * 0.4, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.fill();
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR NUVENS =====
+        function drawCloud(x, y, scale) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            
+            ctx.shadowColor = 'rgba(255,255,255,0.6)';
+            ctx.shadowBlur = 12;
+            
+            ctx.fillStyle = 'rgba(255,255,255,0.92)';
+            ctx.beginPath();
+            ctx.arc(0, 0, 20, 0, Math.PI * 2);
+            ctx.arc(28, -2, 18, 0, Math.PI * 2);
+            ctx.arc(52, 2, 22, 0, Math.PI * 2);
+            ctx.arc(18, -14, 16, 0, Math.PI * 2);
+            ctx.arc(40, -16, 15, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.shadowBlur = 0;
+            
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.beginPath();
+            ctx.arc(20, -14, 10, 0, Math.PI * 2);
+            ctx.arc(38, -16, 9, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR O CHÃO =====
+        function drawGround() {
+            ctx.beginPath();
+            ctx.moveTo(0, 420);
+            ctx.lineTo(canvas.width, 420);
+            ctx.lineTo(canvas.width, 545);
+            ctx.lineTo(0, 545);
+            ctx.closePath();
+            ctx.fillStyle = '#7a8a99';
+            ctx.fill();
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR A ESTRADA =====
+        function drawRoad() {
+            ctx.beginPath();
+            ctx.moveTo(0, 470);
+            ctx.lineTo(canvas.width, 470);
+            ctx.lineTo(canvas.width, 530);
+            ctx.lineTo(0, 530);
+            ctx.closePath();
+            ctx.fillStyle = '#444c5a';
+            ctx.fill();
+            
+            ctx.strokeStyle = '#cfd7e6';
+            ctx.setLineDash([18, 14]);
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, 500);
+            ctx.lineTo(canvas.width, 500);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR UMA JANELA =====
+        function drawWindow(x, y, width, height) {
+            // Vidro da janela (retângulo com cantos arredondados usando arcs)
+            ctx.beginPath();
+            // Canto superior esquerdo arredondado
+            ctx.arc(x + 2, y + 2, 2, Math.PI, Math.PI * 1.5);
+            ctx.lineTo(x + width - 2, y);
+            // Canto superior direito arredondado
+            ctx.arc(x + width - 2, y + 2, 2, Math.PI * 1.5, 0);
+            ctx.lineTo(x + width, y + height - 2);
+            // Canto inferior direito arredondado
+            ctx.arc(x + width - 2, y + height - 2, 2, 0, Math.PI * 0.5);
+            ctx.lineTo(x + 2, y + height);
+            // Canto inferior esquerdo arredondado
+            ctx.arc(x + 2, y + height - 2, 2, Math.PI * 0.5, Math.PI);
+            ctx.closePath();
+            
+            // Preenchimento do vidro (azul claro com gradiente)
+            const windowGradient = ctx.createLinearGradient(x, y, x + width, y + height);
+            windowGradient.addColorStop(0, '#87ceeb');
+            windowGradient.addColorStop(0.5, '#5ba3d1');
+            windowGradient.addColorStop(1, '#3a7ca5');
+            ctx.fillStyle = windowGradient;
+            ctx.fill();
+            
+            // Borda da janela
+            ctx.strokeStyle = '#2d4a5f';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Cruz no meio da janela (molduras)
+            ctx.beginPath();
+            // Linha vertical
+            ctx.moveTo(x + width / 2, y);
+            ctx.lineTo(x + width / 2, y + height);
+            // Linha horizontal
+            ctx.moveTo(x, y + height / 2);
+            ctx.lineTo(x + width, y + height / 2);
+            ctx.strokeStyle = '#2d4a5f';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            
+            // Reflexo de luz (pequeno arco)
+            ctx.beginPath();
+            ctx.arc(x + width * 0.7, y + height * 0.3, 4, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.fill();
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR UMA PORTA =====
+        function drawDoor(x, y, width, height) {
+            // Porta principal (retângulo com cantos arredondados usando arcs)
+            ctx.beginPath();
+            // Canto superior esquerdo arredondado
+            ctx.arc(x + 3, y + 3, 3, Math.PI, Math.PI * 1.5);
+            ctx.lineTo(x + width - 3, y);
+            // Canto superior direito arredondado
+            ctx.arc(x + width - 3, y + 3, 3, Math.PI * 1.5, 0);
+            ctx.lineTo(x + width, y + height);
+            // Linha direita até o chão
+            ctx.lineTo(x + width, y + height);
+            // Linha inferior (base da porta no chão)
+            ctx.lineTo(x, y + height);
+            // Linha esquerda
+            ctx.lineTo(x, y);
+            ctx.closePath();
+            
+            // Preenchimento da porta (marrom escuro)
+            const doorGradient = ctx.createLinearGradient(x, y, x + width, y + height);
+            doorGradient.addColorStop(0, '#4a3a2a');
+            doorGradient.addColorStop(0.5, '#3d2f21');
+            doorGradient.addColorStop(1, '#2a1f15');
+            ctx.fillStyle = doorGradient;
+            ctx.fill();
+            
+            // Borda da porta
+            ctx.strokeStyle = '#1a1510';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Maçaneta (pequeno círculo usando arc)
+            ctx.beginPath();
+            ctx.arc(x + width * 0.85, y + height * 0.5, 3, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fillStyle = '#d4af37';
+            ctx.fill();
+            
+            // Reflexo de luz na porta (pequeno arco)
+            ctx.beginPath();
+            ctx.arc(x + width * 0.3, y + height * 0.3, 6, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.fill();
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR OS EDIFÍCIOS =====
+        function drawBuildings() {
+            buildings.forEach((building, i) => {
+                // Desenha o corpo principal do edifício
+                ctx.beginPath();
+                ctx.moveTo(building.x, 420);
+                ctx.lineTo(building.x + building.w, 420);
+                ctx.lineTo(building.x + building.w, 420 - building.h);
+                ctx.lineTo(building.x, 420 - building.h);
+                ctx.closePath();
+                ctx.fillStyle = colors[i % 3];
+                ctx.fill();
+                
+                // Desenha janelas
+                const windowWidth = 18;
+                const windowHeight = 24;
+                const windowSpacing = 8;
+                const windowsPerRow = Math.floor((building.w - 20) / (windowWidth + windowSpacing));
+                const numRows = Math.floor((building.h - 60) / (windowHeight + windowSpacing));
+                
+                // Calcula posição inicial para centralizar as janelas
+                const totalWindowsWidth = windowsPerRow * windowWidth + (windowsPerRow - 1) * windowSpacing;
+                const startX = building.x + (building.w - totalWindowsWidth) / 2;
+                const totalWindowsHeight = numRows * windowHeight + (numRows - 1) * windowSpacing;
+                const startY = 420 - building.h + 20;
+                
+                // Desenha as janelas em grid
+                for (let row = 0; row < numRows; row++) {
+                    for (let col = 0; col < windowsPerRow; col++) {
+                        const windowX = startX + col * (windowWidth + windowSpacing);
+                        const windowY = startY + row * (windowHeight + windowSpacing);
+                        drawWindow(windowX, windowY, windowWidth, windowHeight);
+                    }
+                }
+                
+                // Desenha a porta (centralizada na base do edifício)
+                const doorWidth = 24;
+                const doorHeight = 40;
+                const doorX = building.x + (building.w - doorWidth) / 2;
+                const doorY = 420 - doorHeight;
+                drawDoor(doorX, doorY, doorWidth, doorHeight);
+            });
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR UM PAINEL SOLAR =====
+        function drawSolarPanel(panel) {
+            const { x, y, width, height } = panel;
+            
+            // Placa principal do painel (retângulo com cantos arredondados usando arcs)
+            ctx.beginPath();
+            // Canto superior esquerdo arredondado
+            ctx.arc(x + 5, y + 5, 5, Math.PI, Math.PI * 1.5);
+            // Linha superior
+            ctx.lineTo(x + width - 5, y);
+            // Canto superior direito arredondado
+            ctx.arc(x + width - 5, y + 5, 5, Math.PI * 1.5, 0);
+            // Linha direita
+            ctx.lineTo(x + width, y + height - 5);
+            // Canto inferior direito arredondado
+            ctx.arc(x + width - 5, y + height - 5, 5, 0, Math.PI * 0.5);
+            // Linha inferior
+            ctx.lineTo(x + 5, y + height);
+            // Canto inferior esquerdo arredondado
+            ctx.arc(x + 5, y + height - 5, 5, Math.PI * 0.5, Math.PI);
+            ctx.closePath();
+            
+            // Preenchimento principal (azul escuro)
+            ctx.fillStyle = '#1a3a52';
+            ctx.fill();
+            
+            // Borda metálica
+            ctx.strokeStyle = '#2d4a5f';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Células solares (grid de pequenos retângulos com arcs para detalhes)
+            const cellRows = 4;
+            const cellCols = Math.floor(width / 30);
+            const cellWidth = (width - 20) / cellCols;
+            const cellHeight = (height - 20) / cellRows;
+            
+            for (let row = 0; row < cellRows; row++) {
+                for (let col = 0; col < cellCols; col++) {
+                    const cellX = x + 10 + col * cellWidth;
+                    const cellY = y + 10 + row * cellHeight;
+                    
+                    // Célula com cantos arredondados
+                    ctx.beginPath();
+                    ctx.arc(cellX + 2, cellY + 2, 2, Math.PI, Math.PI * 1.5);
+                    ctx.lineTo(cellX + cellWidth - 2, cellY);
+                    ctx.arc(cellX + cellWidth - 2, cellY + 2, 2, Math.PI * 1.5, 0);
+                    ctx.lineTo(cellX + cellWidth, cellY + cellHeight - 2);
+                    ctx.arc(cellX + cellWidth - 2, cellY + cellHeight - 2, 2, 0, Math.PI * 0.5);
+                    ctx.lineTo(cellX + 2, cellY + cellHeight);
+                    ctx.arc(cellX + 2, cellY + cellHeight - 2, 2, Math.PI * 0.5, Math.PI);
+                    ctx.closePath();
+                    
+                    // Gradiente para efeito de célula solar
+                    const cellGradient = ctx.createLinearGradient(cellX, cellY, cellX + cellWidth, cellY + cellHeight);
+                    cellGradient.addColorStop(0, '#2c5282');
+                    cellGradient.addColorStop(0.5, '#1e3a5f');
+                    cellGradient.addColorStop(1, '#0f1e2f');
+                    ctx.fillStyle = cellGradient;
+                    ctx.fill();
+                    
+                    // Linha divisória entre células
+                    ctx.strokeStyle = '#0f1e2f';
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                    
+                    // Reflexo de luz (pequeno arco no canto)
+                    ctx.beginPath();
+                    ctx.arc(cellX + 4, cellY + 4, 3, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.fill();
+                }
+            }
+            
+            // Estrutura de suporte inferior (pequenos arcos)
+            ctx.beginPath();
+            ctx.arc(x + width * 0.25, y + height, 3, Math.PI, 0);
+            ctx.lineTo(x + width * 0.25 + 6, y + height);
+            ctx.moveTo(x + width * 0.75, y + height);
+            ctx.arc(x + width * 0.75, y + height, 3, Math.PI, 0);
+            ctx.lineTo(x + width * 0.75 + 6, y + height);
+            ctx.closePath();
+            ctx.fillStyle = '#3a4a5a';
+            ctx.fill();
+        }
+        
+        // ===== FUNÇÃO PARA DESENHAR TUDO =====
+        function drawScene() {
+            // Limpa o canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Desenha elementos estáticos
+            drawSky();
+            drawSun();
+            cloudPositions.forEach(c => drawCloud(c.x, c.y, c.s));
+            drawGround();
+            drawRoad();
+            drawBuildings();
+            
+            // Desenha painéis solares se o checkbox estiver marcado
+            if (showPanelsCheckbox.checked) {
+                solarPanels.forEach(panel => drawSolarPanel(panel));
+            }
+        }
+        
+        // ===== FUNÇÕES DE INTERAÇÃO (DRAG AND DROP) =====
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+        
+        function isPointInPanel(x, y, panel) {
+            return x >= panel.x && x <= panel.x + panel.width &&
+                   y >= panel.y && y <= panel.y + panel.height;
+        }
+        
+        // Evento de mouse down - inicia o drag
+        canvas.addEventListener('mousedown', (e) => {
+            if (!showPanelsCheckbox.checked) return;
+            
+            const mousePos = getMousePos(e);
+            
+            // Verifica qual painel foi clicado
+            for (let panel of solarPanels) {
+                if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
+                    draggedPanel = panel;
+                    panel.isDragging = true;
+                    panel.dragOffsetX = mousePos.x - panel.x;
+                    panel.dragOffsetY = mousePos.y - panel.y;
+                    canvas.style.cursor = 'grabbing';
+                    break;
+                }
+            }
+        });
+        
+        // Evento de mouse move - atualiza posição durante drag
+        canvas.addEventListener('mousemove', (e) => {
+            const mousePos = getMousePos(e);
+            
+            if (draggedPanel && draggedPanel.isDragging) {
+                draggedPanel.x = mousePos.x - draggedPanel.dragOffsetX;
+                draggedPanel.y = mousePos.y - draggedPanel.dragOffsetY;
+                drawScene();
+            } else if (showPanelsCheckbox.checked) {
+                // Muda cursor se estiver sobre um painel
+                let overPanel = false;
+                for (let panel of solarPanels) {
+                    if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
+                        overPanel = true;
+                        break;
+                    }
+                }
+                canvas.style.cursor = overPanel ? 'grab' : 'default';
+            }
+        });
+        
+        // Evento de mouse up - termina o drag
+        canvas.addEventListener('mouseup', () => {
+            if (draggedPanel) {
+                draggedPanel.isDragging = false;
+                draggedPanel = null;
+                canvas.style.cursor = 'default';
+            }
+        });
+        
+        // Evento de mouse leave - termina o drag se o mouse sair do canvas
+        canvas.addEventListener('mouseleave', () => {
+            if (draggedPanel) {
+                draggedPanel.isDragging = false;
+                draggedPanel = null;
+                canvas.style.cursor = 'default';
+            }
+        });
+        
+        // Evento do checkbox - redesenha quando marcado/desmarcado
+        showPanelsCheckbox.addEventListener('change', () => {
+            drawScene();
+        });
+        
+        // Desenha a cena inicial
+        drawScene();
     </script>
 </body>
 </html>
