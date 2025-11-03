@@ -51,6 +51,10 @@ Recriar/explicacao_projeto.txt
         <label>
             <input type="checkbox" id="showPanels"> Mostrar Painéis Solares
         </label>
+            &nbsp;&nbsp;&nbsp;
+            <label>
+                <input type="checkbox" id="showBus"> Mostrar Autocarro (arrastar para a estrada)
+            </label>
     </div>
     
     <!-- Canvas onde será desenhada a cidade -->
@@ -61,6 +65,7 @@ Recriar/explicacao_projeto.txt
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const showPanelsCheckbox = document.getElementById('showPanels');
+        const showBusCheckbox = document.getElementById('showBus');
         
         // Array com dados dos edifícios (posição x, largura, altura)
         const buildings = [
@@ -111,6 +116,40 @@ Recriar/explicacao_projeto.txt
         let animationActive = false;           // controla loop de animação
         let animationStartTs = null;           // timestamp inicial
         let dashOffset = 0;                    // offset para animação de tracejado
+
+        // ===== VARIÁVEIS DE ANIMAÇÃO CONTÍNUA =====
+        let lastFrameTs = 0;                   // timestamp do último frame
+        const smokeParticles = [];             // lista de partículas de fumo (fábricas e escapes)
+        const cars = [];                       // lista de carros na estrada
+        let nextCarSpawnTs = 0;                // tempo (ms) do próximo spawn de carro
+
+        // ===== MITIGAÇÃO (paineis solares reduzem levemente o fumo) =====
+        let mitigationFromPanels = 0;          // contribuição dos painéis (0..~0.6)
+        let extraMitigation = 0;               // contribuição de outros fatores (ex.: autocarro)
+        let totalMitigation = 0;               // clamp final 0..0.75 (com autocarro)
+        const baseExhaustInterval = 120;       // ms entre puffs de escape de carro (base)
+
+        // ===== AUTOCARRO (drag-and-drop para a estrada) =====
+        const bus = {
+            x: 80,
+            y: canvas.height - 90,
+            w: 120,
+            h: 30,
+            isDragging: false,
+            dragOffsetX: 0,
+            dragOffsetY: 0,
+            placedOnRoad: false,
+            visible: false
+        };
+
+        // ===== DADOS DAS FÁBRICAS (EXPOSTOS PARA FUMO) =====
+        const factoriesBaseY = 408;            // linha base das fábricas distantes
+        const factoriesData = [               // dados estruturados das fábricas
+            { x: 760,  w: 120, h: 62, chimneys: [ {xOff: 18, w: 14, h: 54} ] }, // fábrica 1
+            { x: 910,  w: 150, h: 70, chimneys: [ {xOff: 24, w: 16, h: 60}, {xOff: 80, w: 14, h: 50} ] }, // fábrica 2
+            { x: 1080, w: 120, h: 60, chimneys: [ {xOff: 22, w: 14, h: 52} ] }  // fábrica 3
+        ];
+        let factoryChimneyOutlets = [];        // saídas de chaminé (x,y) recalculadas a cada desenho
 
         function startHighlightAnimation() {
             if (!animationActive) {
@@ -216,25 +255,22 @@ Recriar/explicacao_projeto.txt
             ctx.restore();
         }
         
-        // ===== FUNÇÃO PARA DESENHAR FÁBRICAS AO FUNDO (SEM ANIMAÇÃO DO FUMO) =====
+        // ===== FUNÇÃO PARA DESENHAR FÁBRICAS AO FUNDO (AGORA SEM FUMO ESTÁTICO) =====
         function drawFactories() {
             // Silhuetas distantes posicionadas perto do horizonte, apenas na zona direita
-            const baseY = 408; // mais alto para parecer mais distante
+            const baseY = factoriesBaseY; // mais alto para parecer mais distante
             ctx.save();
             
             // Atmosfera ao longe: tons mais claros/acinzentados e menor opacidade
             const silhouette = '#6a7a88';
             const darker = '#5f6c78';
-            const smokeColor = 'rgba(220, 225, 230, 0.35)';
             ctx.globalAlpha = 0.7;
 
-            // Conjunto de fábricas com chaminés
-            // Apenas no lado direito (x >= ~740), para não "passar por trás" dos prédios
-            const factories = [
-                { x: 760, w: 120, h: 62, chimneys: [ {xOff: 18, w: 14, h: 54} ] },
-                { x: 910, w: 150, h: 70, chimneys: [ {xOff: 24, w: 16, h: 60}, {xOff: 80, w: 14, h: 50} ] },
-                { x: 1080, w: 120, h: 60, chimneys: [ {xOff: 22, w: 14, h: 52} ] }
-            ];
+            // Conjunto de fábricas com chaminés (usar dados globais)
+            const factories = factoriesData;
+
+            // limpar e recomputar saídas das chaminés para o sistema de partículas
+            factoryChimneyOutlets = [];
 
             factories.forEach((f, idx) => {
                 // Corpo principal da fábrica
@@ -249,8 +285,8 @@ Recriar/explicacao_projeto.txt
 
                 // Chaminés
                 f.chimneys.forEach((c) => {
-                    const cx = f.x + c.xOff;
-                    const ch = c.h;
+                    const cx = f.x + c.xOff; // posição X da chaminé
+                    const ch = c.h;          // altura da chaminé
                     // corpo da chaminé
                     ctx.beginPath();
                     ctx.moveTo(cx, baseY - f.h);
@@ -261,22 +297,10 @@ Recriar/explicacao_projeto.txt
                     ctx.fillStyle = darker;
                     ctx.fill();
 
-                    // Fumo (estático): três "nuvens" ovais/círculos sobre a chaminé
-                    const smokeBaseX = cx + c.w * 0.5;
-                    const smokeBaseY = baseY - f.h - ch - 6;
-                    ctx.fillStyle = smokeColor;
-                    // puff 1
-                    ctx.beginPath();
-                    ctx.arc(smokeBaseX, smokeBaseY, 10, 0, Math.PI * 2);
-                    ctx.fill();
-                    // puff 2 (deslocado)
-                    ctx.beginPath();
-                    ctx.arc(smokeBaseX + 12, smokeBaseY - 8, 8, 0, Math.PI * 2);
-                    ctx.fill();
-                    // puff 3 (mais alto e maior)
-                    ctx.beginPath();
-                    ctx.arc(smokeBaseX - 8, smokeBaseY - 16, 12, 0, Math.PI * 2);
-                    ctx.fill();
+                // Guardar posição da saída para partículas de fumo
+                    const smokeBaseX = cx + c.w * 0.5;           // centro da chaminé
+                    const smokeBaseY = baseY - f.h - ch - 6;      // ligeiramente acima
+                factoryChimneyOutlets.push({ x: smokeBaseX, y: smokeBaseY });
                 });
 
                 // Pequena base/fundação para não parecer "a flutuar"
@@ -318,6 +342,156 @@ Recriar/explicacao_projeto.txt
 
             ctx.restore();
         }
+
+        // ===== SISTEMA DE PARTÍCULAS DE FUMO =====
+        function spawnFactorySmoke(dtMs) {
+            // Spawn rate adaptativo por chaminé
+            const spawnPerSecondBase = 2.5;       // puffs por segundo por chaminé (base)
+            const spawnPerSecond = spawnPerSecondBase * Math.max(0.2, (1 - totalMitigation)); // piso 20%
+            const prob = Math.max(0, spawnPerSecond) * (dtMs / 1000); // probabilidade por frame
+            factoryChimneyOutlets.forEach((o) => {
+                if (Math.random() < prob) {       // decide se cria partícula neste frame
+                    const sizeFactor = Math.max(0.4, (1 - totalMitigation * 0.7)); // diminuir tamanho com mitigação
+                    const growthFactor = Math.max(0.5, (1 - totalMitigation * 0.6));
+                    smokeParticles.push({
+                        kind: 'factory',          // etiqueta para cor/comportamento
+                        x: o.x + (Math.random() * 4 - 2),  // jitter horizontal
+                        y: o.y + (Math.random() * 2 - 1),  // jitter vertical
+                        vx: (Math.random() * 0.15 - 0.075),// ligeira deriva horizontal
+                        vy: -(0.25 + Math.random() * 0.35),// sobe para cima
+                        radius: (6 + Math.random() * 6) * sizeFactor,     // tamanho inicial reduzido
+                        growth: (0.015 + Math.random() * 0.02) * growthFactor, // expansão mais lenta
+                        alpha: 0.35 * (1 - totalMitigation * 0.8), // menos opaco
+                        fade: 0.04 * (1 + totalMitigation * 0.6),  // dissipa um pouco mais rápido
+                    });
+                }
+            });
+        }
+
+        function spawnCarSmoke(x, y, dir) {
+            // Pequenas partículas rápidas de escape
+            const sizeFactor = Math.max(0.5, (1 - totalMitigation * 0.7));
+            const growthFactor = Math.max(0.6, (1 - totalMitigation * 0.6));
+            smokeParticles.push({
+                kind: 'car',                         // etiqueta para cor/comportamento
+                x: x,                                 // posição inicial X
+                y: y,                                 // posição inicial Y
+                vx: (dir > 0 ? -0.12 : 0.12) + (Math.random() * 0.12 - 0.06), // deriva para trás
+                vy: -(0.05 + Math.random() * 0.1),    // sobe um pouco
+                radius: (2.5 + Math.random() * 2) * sizeFactor,      // menor com mitigação
+                growth: (0.02 + Math.random() * 0.02) * growthFactor, // cresce menos
+                alpha: 0.5 * (1 - totalMitigation * 0.8), // menos opaco
+                fade: 0.10 * (1 + totalMitigation * 0.7), // desaparece um pouco mais rápido
+            });
+        }
+
+        function updateAndDrawSmoke(dtMs) {
+            const dt = dtMs / 16.67;                 // normalizar para steps ~60fps
+            for (let i = smokeParticles.length - 1; i >= 0; i--) {
+                const p = smokeParticles[i];         // partícula atual
+                p.x += p.vx * dtMs;                  // mover em X
+                p.y += p.vy * dtMs;                  // mover em Y
+                p.radius += p.growth * dtMs;         // aumentar raio
+                p.alpha -= p.fade * (dtMs / 1000);   // reduzir opacidade
+                if (p.alpha <= 0 || p.radius <= 0 || p.y + p.radius < 0) {
+                    smokeParticles.splice(i, 1);     // remover se invisível/fora
+                    continue;
+                }
+            }
+
+            // Desenho das partículas
+            smokeParticles.forEach((p) => {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, Math.min(1, p.alpha)); // clamp
+                ctx.fillStyle = p.kind === 'factory' ? 'rgba(220, 225, 230, 1)' : 'rgba(200, 205, 210, 1)';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // ===== CARROS NA ESTRADA =====
+        function spawnCar(ts) {
+            // Duas faixas: esquerda->direita (y ~ 488) e direita->esquerda (y ~ 512)
+            const lane = Math.random() < 0.5 ? 0 : 1; // escolher faixa aleatória
+            if (lane === 0) {
+                cars.push({
+                    x: -120,                         // começa fora do ecrã à esquerda
+                    y: 488,                           // posição vertical da faixa
+                    w: 46, h: 16,                     // dimensões do carro
+                    color: '#e74c3c',                 // cor do carro
+                    speed: 0.18 + Math.random() * 0.10, // px/ms
+                    dir: 1,                           // direção positiva (para a direita)
+                    lastSmoke: ts                     // timestamp do último fumo
+                });
+            } else {
+                cars.push({
+                    x: canvas.width + 120,           // começa fora do ecrã à direita
+                    y: 512,                           // posição vertical da faixa
+                    w: 52, h: 18,                     // dimensões do carro
+                    color: '#3498db',                 // cor do carro
+                    speed: 0.16 + Math.random() * 0.10, // px/ms
+                    dir: -1,                          // direção negativa (para a esquerda)
+                    lastSmoke: ts                     // timestamp do último fumo
+                });
+            }
+        }
+
+        function updateAndDrawCars(dtMs, ts) {
+            // Controlo de spawn dos carros
+            if (ts >= nextCarSpawnTs) {
+                spawnCar(ts);                                  // cria um carro
+                const baseGap = 900 + Math.random() * 1400;
+                let spawnFactor = 1 + totalMitigation * 1.0;   // redução ligada à mitigação
+                if (showBusCheckbox.checked && bus.placedOnRoad) spawnFactor *= 1.25; // -25% carros
+                nextCarSpawnTs = ts + baseGap * spawnFactor;
+            }
+
+            // Atualização da posição e fumo
+            for (let i = cars.length - 1; i >= 0; i--) {
+                const c = cars[i];
+                c.x += c.speed * c.dir * dtMs;                 // mover o carro
+                // Remover se saiu do ecrã
+                if ((c.dir > 0 && c.x - c.w > canvas.width + 40) || (c.dir < 0 && c.x + c.w < -40)) {
+                    cars.splice(i, 1);
+                    continue;
+                }
+
+                // Emissões de fumo do escape (intervalo aumenta com mitigação)
+                const exhaustInterval = baseExhaustInterval * (1 + totalMitigation * 3.0); // menos fumo, ajuste suave
+                if (ts - c.lastSmoke > exhaustInterval) {
+                    const exhaustX = c.dir > 0 ? c.x - c.w * 0.5 - 4 : c.x + c.w * 0.5 + 4; // atrás do carro
+                    const exhaustY = c.y + c.h * 0.25; // altura do escape
+                    spawnCarSmoke(exhaustX, exhaustY, c.dir);
+                    c.lastSmoke = ts;                // atualizar timestamp
+                }
+            }
+
+            // Desenho dos carros (formas simples)
+            cars.forEach((c) => {
+                ctx.save();
+                ctx.translate(c.x, c.y);            // posicionar no mundo
+                ctx.scale(c.dir, 1);                 // espelhar se necessário
+                // corpo
+                ctx.fillStyle = c.color;
+                ctx.beginPath();
+                ctx.roundRect(-c.w * 0.5, -c.h * 0.5, c.w, c.h, 4);
+                ctx.fill();
+                // cabine
+                ctx.fillStyle = '#cfe8ff';
+                ctx.beginPath();
+                ctx.roundRect(-c.w * 0.2, -c.h * 0.6, c.w * 0.35, c.h * 0.55, 3);
+                ctx.fill();
+                // rodas
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.arc(-c.w * 0.25, c.h * 0.5, 5, 0, Math.PI * 2);
+                ctx.arc(c.w * 0.25, c.h * 0.5, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
         
         // ===== FUNÇÃO PARA DESENHAR O CHÃO =====
         function drawGround() {
@@ -350,6 +524,42 @@ Recriar/explicacao_projeto.txt
             ctx.lineTo(canvas.width, 500);
             ctx.stroke();
             ctx.setLineDash([]);
+        }
+
+        // Rect da estrada para validação de colocação
+        function getRoadRect() {
+            return { y1: 470, y2: 530 };
+        }
+
+        // Desenhar o autocarro
+        function drawBus(obj) {
+            if (!obj.visible) return;
+            ctx.save();
+            ctx.translate(obj.x, obj.y);
+            // corpo do autocarro
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.roundRect(-obj.w * 0.5, -obj.h * 0.5, obj.w, obj.h, 6);
+            ctx.fill();
+            // janelas
+            ctx.fillStyle = '#dff2ff';
+            const winY = -obj.h * 0.22;
+            const winH = obj.h * 0.44;
+            const cols = 5;
+            for (let i = 0; i < cols; i++) {
+                const t = (i + 0.5) / cols;
+                const wx = -obj.w * 0.36 + t * obj.w * 0.72;
+                ctx.beginPath();
+                ctx.roundRect(wx - 10, winY, 20, winH, 3);
+                ctx.fill();
+            }
+            // rodas
+            ctx.fillStyle = '#222';
+            ctx.beginPath();
+            ctx.arc(-obj.w * 0.35, obj.h * 0.5, 7, 0, Math.PI * 2);
+            ctx.arc(obj.w * 0.35, obj.h * 0.5, 7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         }
         
         // ===== FUNÇÃO PARA DESENHAR UMA JANELA =====
@@ -540,720 +750,10 @@ Recriar/explicacao_projeto.txt
             }
             ctx.restore();
         }
-        
-        // ===== FUNÇÃO PARA DESENHAR UM PAINEL SOLAR =====
-        function drawSolarPanel(panel) {
-            const { x, y, width, height } = panel;
-            
-            // Placa principal do painel (retângulo com cantos arredondados usando arcs)
-            ctx.beginPath();
-            // Canto superior esquerdo arredondado
-            ctx.arc(x + 5, y + 5, 5, Math.PI, Math.PI * 1.5);
-            // Linha superior
-            ctx.lineTo(x + width - 5, y);
-            // Canto superior direito arredondado
-            ctx.arc(x + width - 5, y + 5, 5, Math.PI * 1.5, 0);
-            // Linha direita
-            ctx.lineTo(x + width, y + height - 5);
-            // Canto inferior direito arredondado
-            ctx.arc(x + width - 5, y + height - 5, 5, 0, Math.PI * 0.5);
-            // Linha inferior
-            ctx.lineTo(x + 5, y + height);
-            // Canto inferior esquerdo arredondado
-            ctx.arc(x + 5, y + height - 5, 5, Math.PI * 0.5, Math.PI);
-            ctx.closePath();
-            
-            // Preenchimento principal (azul escuro)
-            ctx.fillStyle = '#1a3a52';
-            ctx.fill();
-            
-            // Borda metálica
-            ctx.strokeStyle = '#2d4a5f';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Células solares (grid de pequenos retângulos com arcs para detalhes)
-            const cellRows = 4;
-            const cellCols = Math.floor(width / 30);
-            const cellWidth = (width - 20) / cellCols;
-            const cellHeight = (height - 20) / cellRows;
-            
-            for (let row = 0; row < cellRows; row++) {
-                for (let col = 0; col < cellCols; col++) {
-                    const cellX = x + 10 + col * cellWidth;
-                    const cellY = y + 10 + row * cellHeight;
-                    
-                    // Célula com cantos arredondados
-                    ctx.beginPath();
-                    ctx.arc(cellX + 2, cellY + 2, 2, Math.PI, Math.PI * 1.5);
-                    ctx.lineTo(cellX + cellWidth - 2, cellY);
-                    ctx.arc(cellX + cellWidth - 2, cellY + 2, 2, Math.PI * 1.5, 0);
-                    ctx.lineTo(cellX + cellWidth, cellY + cellHeight - 2);
-                    ctx.arc(cellX + cellWidth - 2, cellY + cellHeight - 2, 2, 0, Math.PI * 0.5);
-                    ctx.lineTo(cellX + 2, cellY + cellHeight);
-                    ctx.arc(cellX + 2, cellY + cellHeight - 2, 2, Math.PI * 0.5, Math.PI);
-                    ctx.closePath();
-                    
-                    // Gradiente para efeito de célula solar
-                    const cellGradient = ctx.createLinearGradient(cellX, cellY, cellX + cellWidth, cellY + cellHeight);
-                    cellGradient.addColorStop(0, '#2c5282');
-                    cellGradient.addColorStop(0.5, '#1e3a5f');
-                    cellGradient.addColorStop(1, '#0f1e2f');
-                    ctx.fillStyle = cellGradient;
-                    ctx.fill();
-                    
-                    // Linha divisória entre células
-                    ctx.strokeStyle = '#0f1e2f';
-                    ctx.lineWidth = 0.5;
-                    ctx.stroke();
-                    
-                    // Reflexo de luz (pequeno arco no canto)
-                    ctx.beginPath();
-                    ctx.arc(cellX + 4, cellY + 4, 3, 0, Math.PI * 2);
-                    ctx.closePath();
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                    ctx.fill();
-                }
-            }
-            
-            // Estrutura de suporte inferior (pequenos arcos)
-            ctx.beginPath();
-            ctx.arc(x + width * 0.25, y + height, 3, Math.PI, 0);
-            ctx.lineTo(x + width * 0.25 + 6, y + height);
-            ctx.moveTo(x + width * 0.75, y + height);
-            ctx.arc(x + width * 0.75, y + height, 3, Math.PI, 0);
-            ctx.lineTo(x + width * 0.75 + 6, y + height);
-            ctx.closePath();
-            ctx.fillStyle = '#3a4a5a';
-            ctx.fill();
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR TUDO =====
-        function drawScene(elapsedMs) {
-            // Limpa o canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Desenha elementos estáticos
-            drawSky();
-            drawSun();
-            cloudPositions.forEach(c => drawCloud(c.x, c.y, c.s));
-            // Fábricas distantes (atrás do primeiro plano)
-            drawFactories();
-            drawGround();
-            drawRoad();
-            drawBuildings();
-            
-            // Highlight do telhado (por cima dos prédios, antes dos painéis)
-            if (showPanelsCheckbox.checked && highlightedBuildingIndex !== null) {
-                const b = buildings[highlightedBuildingIndex];
-                if (b) drawRoofHighlight(b, elapsedMs || 0);
-            }
 
-            // Desenha painéis solares se o checkbox estiver marcado
-            if (showPanelsCheckbox.checked) {
-                solarPanels.forEach(panel => drawSolarPanel(panel));
-            }
-        }
-        
-        // ===== FUNÇÕES DE INTERAÇÃO (DRAG AND DROP) =====
-        function getMousePos(e) {
-            const rect = canvas.getBoundingClientRect();
-            return {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            };
-        }
-        
-        function isPointInPanel(x, y, panel) {
-            return x >= panel.x && x <= panel.x + panel.width &&
-                   y >= panel.y && y <= panel.y + panel.height;
-        }
-        
-        // Evento de mouse down - inicia o drag
-        canvas.addEventListener('mousedown', (e) => {
-            if (!showPanelsCheckbox.checked) return;
-            
-            const mousePos = getMousePos(e);
-            
-            // Verifica qual painel foi clicado
-            for (let panel of solarPanels) {
-                if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
-                    draggedPanel = panel;
-                    panel.isDragging = true;
-                    panel.dragOffsetX = mousePos.x - panel.x;
-                    panel.dragOffsetY = mousePos.y - panel.y;
-                    canvas.style.cursor = 'grabbing';
-                    // Ativa highlight temporário do prédio alvo durante o drag
-                    highlightedBuildingIndex = panel.buildingIndex;
-                    if (!animationActive) startHighlightAnimation();
-                    break;
-                }
-            }
-        });
-        
-        // Evento de mouse move - atualiza posição durante drag
-        canvas.addEventListener('mousemove', (e) => {
-            const mousePos = getMousePos(e);
-            
-            if (draggedPanel && draggedPanel.isDragging) {
-                draggedPanel.x = mousePos.x - draggedPanel.dragOffsetX;
-                draggedPanel.y = mousePos.y - draggedPanel.dragOffsetY;
-                drawScene();
-            } else if (showPanelsCheckbox.checked) {
-                // Muda cursor se estiver sobre um painel
-                let overPanel = false;
-                for (let panel of solarPanels) {
-                    if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
-                        overPanel = true;
-                        break;
-                    }
-                }
-                canvas.style.cursor = overPanel ? 'grab' : 'default';
-            }
-        });
-        
-        // Evento de mouse up - termina o drag
-        canvas.addEventListener('mouseup', () => {
-            if (draggedPanel) {
-                draggedPanel.isDragging = false;
-                draggedPanel = null;
-                canvas.style.cursor = 'default';
-                // Se não estiver fixo por clique, remove o highlight após soltar
-                if (!highlightPinned) {
-                    highlightedBuildingIndex = null;
-                }
-                if (!animationActive) stopHighlightAnimationIfIdle();
-                drawScene();
-            }
-        });
-        
-        // Evento de mouse leave - termina o drag se o mouse sair do canvas
-        canvas.addEventListener('mouseleave', () => {
-            if (draggedPanel) {
-                draggedPanel.isDragging = false;
-                draggedPanel = null;
-                canvas.style.cursor = 'default';
-            }
-        });
-        
-        // Evento do checkbox - redesenha quando marcado/desmarcado
-        showPanelsCheckbox.addEventListener('change', () => {
-            if (!showPanelsCheckbox.checked) {
-                highlightedBuildingIndex = null;
-                highlightPinned = false;
-            }
-            drawScene();
-        });
-
-        // Clique para alternar highlight do telhado do prédio associado ao painel
-        canvas.addEventListener('click', (e) => {
-            if (!showPanelsCheckbox.checked) return;
-            const mousePos = getMousePos(e);
-            let clickedPanel = null;
-            for (let panel of solarPanels) {
-                if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
-                    clickedPanel = panel;
-                    break;
-                }
-            }
-            if (clickedPanel) {
-                if (highlightedBuildingIndex === clickedPanel.buildingIndex && highlightPinned) {
-<!DOCTYPE html>
-<!--
-Documento comentado por secções. Explicação linha-a-linha detalhada em:
-Recriar/explicacao_projeto.txt
--->
-<html lang="en">
-<head>
-    <!-- Configurações básicas do documento HTML -->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    
-    <!-- Estilos CSS para centralizar o canvas e definir fundo -->
-    <style>
-        body {
-            margin: 0;                    /* Remove margens padrão do navegador */
-            padding: 0;                   /* Remove padding padrão do navegador */
-            display: flex;                /* Transforma o body em container flexbox */
-            flex-direction: column;       /* Organiza elementos verticalmente */
-            justify-content: center;      /* Centraliza horizontalmente */
-            align-items: center;          /* Centraliza verticalmente */
-            min-height: 100vh;           /* Garante altura mínima da viewport */
-            background-color: #333333;    /* Fundo cinza escuro */
-        }
-        
-        #checkbox-container {
-            margin-bottom: 20px;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.3);
-            border-radius: 5px;
-        }
-        
-        #checkbox-container label {
-            color: white;
-            font-family: Arial, sans-serif;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        
-        #checkbox-container input[type="checkbox"] {
-            margin-right: 8px;
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    <!-- Checkbox para mostrar painéis solares -->
-    <div id="checkbox-container">
-        <label>
-            <input type="checkbox" id="showPanels"> Mostrar Painéis Solares
-        </label>
-    </div>
-    
-    <!-- Canvas onde será desenhada a cidade -->
-    <canvas id="canvas" width="1100" height="600"></canvas>
-    
-    <script>
-        // Obtém referências ao canvas e seu contexto 2D
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const showPanelsCheckbox = document.getElementById('showPanels');
-        
-        // Array com dados dos edifícios (posição x, largura, altura)
-        const buildings = [
-            {x: 80,  w: 120, h: 180},    // Edifício 1 (mais largo e alto)
-            {x: 230, w: 100, h: 220},    // Edifício 2
-            {x: 380, w: 160, h: 200},    // Edifício 3
-            {x: 560, w: 130, h: 240}     // Edifício 4 (removido o da direita)
-        ];
-        
-        // Array com cores para os edifícios (alterna entre 3 cores)
-        const colors = ['#445066', '#384356', '#2f3848'];
-        
-        // Array com posições e escalas das nuvens
-        const cloudPositions = [
-            {x: 140, y: 100, s: 1.0},    // Nuvem 1: tamanho normal
-            {x: 360, y: 120, s: 0.95},   // Nuvem 2: ligeiramente menor
-            {x: 560, y: 105, s: 1.05},   // Nuvem 3: ligeiramente maior
-            {x: 760, y: 130, s: 1.0},    // Nuvem 4: tamanho normal
-            {x: 980, y: 145, s: 0.9}     // Nuvem 5: menor (próxima ao sol)
-        ];
-        
-        // Criar painéis solares (um para cada edifício)
-        // Inicialmente posicionados na parte inferior do canvas
-        const solarPanels = buildings.map((building, i) => {
-            const panelWidth = building.w * 0.8;  // Largura proporcional ao edifício
-            const panelHeight = 40;                // Altura fixa
-            const startX = 100 + i * 200;          // Espaçamento horizontal
-            const startY = canvas.height - 30;     // Posição na parte inferior
-            
-            return {
-                x: startX,
-                y: startY,
-                width: panelWidth,
-                height: panelHeight,
-                buildingIndex: i,
-                isDragging: false,
-                dragOffsetX: 0,
-                dragOffsetY: 0
-            };
-        });
-        
-        // Variáveis para controle de drag
-        let draggedPanel = null;
-        
-        // ===== CONTROLO DO HIGHLIGHT NO TOPO DOS PRÉDIOS =====
-        let highlightedBuildingIndex = null;   // índice do prédio a destacar
-        let highlightPinned = false;           // se true, permanece até novo clique
-        let animationActive = false;           // controla loop de animação
-        let animationStartTs = null;           // timestamp inicial
-        let dashOffset = 0;                    // offset para animação de tracejado
-
-        function startHighlightAnimation() {
-            if (!animationActive) {
-                animationActive = true;
-                animationStartTs = null;
-                requestAnimationFrame(animationLoop);
-            }
-        }
-
-        function stopHighlightAnimationIfIdle() {
-            // O loop pára sozinho quando não há highlight ativo nem drag em curso
-            // (controlado dentro do animationLoop)
-        }
-
-        function animationLoop(ts) {
-            if (animationStartTs === null) animationStartTs = ts;
-            const elapsed = ts - animationStartTs;
-            dashOffset = (elapsed / 16) % 100; // animação suave do tracejado
-
-            // Redesenha continuamente quando highlight está ativo ou enquanto arrasta
-            const shouldKeepAnimating = (highlightedBuildingIndex !== null && showPanelsCheckbox.checked) || (draggedPanel && draggedPanel.isDragging);
-            if (shouldKeepAnimating) {
-                drawScene(elapsed);
-                requestAnimationFrame(animationLoop);
-            } else {
-                animationActive = false;
-                animationStartTs = null;
-                drawScene();
-            }
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR O CÉU =====
-        function drawSky() {
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(canvas.width, 0);
-            ctx.lineTo(canvas.width, 420);
-            ctx.lineTo(0, 420);
-            ctx.closePath();
-            
-            const grd = ctx.createLinearGradient(0, 0, 0, 420);
-            grd.addColorStop(0, '#78b7ff');
-            grd.addColorStop(1, '#c6e0ff');
-            ctx.fillStyle = grd;
-            ctx.fill();
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR O SOL =====
-        function drawSun() {
-            const sunX = 900, sunY = 120, sunRadius = 26;
-            
-            ctx.shadowColor = 'rgba(255, 183, 3, 0.4)';
-            ctx.shadowBlur = 20;
-            
-            ctx.beginPath();
-            ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
-            ctx.closePath();
-            
-            const sunGradient = ctx.createRadialGradient(sunX - 8, sunY - 8, 0, sunX, sunY, sunRadius);
-            sunGradient.addColorStop(0, '#ffeb3b');
-            sunGradient.addColorStop(0.7, '#ffb703');
-            sunGradient.addColorStop(1, '#ff8f00');
-            
-            ctx.fillStyle = sunGradient;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-            
-            ctx.beginPath();
-            ctx.arc(sunX - 8, sunY - 8, sunRadius * 0.4, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-            ctx.fill();
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR NUVENS =====
-        function drawCloud(x, y, scale) {
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.scale(scale, scale);
-            
-            ctx.shadowColor = 'rgba(255,255,255,0.6)';
-            ctx.shadowBlur = 12;
-            
-            ctx.fillStyle = 'rgba(255,255,255,0.92)';
-            ctx.beginPath();
-            ctx.arc(0, 0, 20, 0, Math.PI * 2);
-            ctx.arc(28, -2, 18, 0, Math.PI * 2);
-            ctx.arc(52, 2, 22, 0, Math.PI * 2);
-            ctx.arc(18, -14, 16, 0, Math.PI * 2);
-            ctx.arc(40, -16, 15, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fill();
-            
-            ctx.shadowBlur = 0;
-            
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.beginPath();
-            ctx.arc(20, -14, 10, 0, Math.PI * 2);
-            ctx.arc(38, -16, 9, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fill();
-            
-            ctx.restore();
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR FÁBRICAS AO FUNDO (SEM ANIMAÇÃO DO FUMO) =====
-        function drawFactories() {
-            // Silhuetas distantes posicionadas perto do horizonte, apenas na zona direita
-            const baseY = 408; // mais alto para parecer mais distante
-            ctx.save();
-            
-            // Atmosfera ao longe: tons mais claros/acinzentados e menor opacidade
-            const silhouette = '#6a7a88';
-            const darker = '#5f6c78';
-            const smokeColor = 'rgba(220, 225, 230, 0.35)';
-            ctx.globalAlpha = 0.7;
-
-            // Conjunto de fábricas com chaminés
-            // Apenas no lado direito (x >= ~740), para não "passar por trás" dos prédios
-            const factories = [
-                { x: 760, w: 120, h: 62, chimneys: [ {xOff: 18, w: 14, h: 54} ] },
-                { x: 910, w: 150, h: 70, chimneys: [ {xOff: 24, w: 16, h: 60}, {xOff: 80, w: 14, h: 50} ] },
-                { x: 1080, w: 120, h: 60, chimneys: [ {xOff: 22, w: 14, h: 52} ] }
-            ];
-
-            factories.forEach((f, idx) => {
-                // Corpo principal da fábrica
-                ctx.beginPath();
-                ctx.moveTo(f.x, baseY);
-                ctx.lineTo(f.x + f.w, baseY);
-                ctx.lineTo(f.x + f.w, baseY - f.h);
-                ctx.lineTo(f.x, baseY - f.h);
-                ctx.closePath();
-                ctx.fillStyle = idx % 2 === 0 ? silhouette : darker;
-                ctx.fill();
-
-                // Chaminés
-                f.chimneys.forEach((c) => {
-                    const cx = f.x + c.xOff;
-                    const ch = c.h;
-                    // corpo da chaminé
-                    ctx.beginPath();
-                    ctx.moveTo(cx, baseY - f.h);
-                    ctx.lineTo(cx + c.w, baseY - f.h);
-                    ctx.lineTo(cx + c.w, baseY - f.h - ch);
-                    ctx.lineTo(cx, baseY - f.h - ch);
-                    ctx.closePath();
-                    ctx.fillStyle = darker;
-                    ctx.fill();
-
-                    // Fumo (estático): três "nuvens" ovais/círculos sobre a chaminé
-                    const smokeBaseX = cx + c.w * 0.5;
-                    const smokeBaseY = baseY - f.h - ch - 6;
-                    ctx.fillStyle = smokeColor;
-                    // puff 1
-                    ctx.beginPath();
-                    ctx.arc(smokeBaseX, smokeBaseY, 10, 0, Math.PI * 2);
-                    ctx.fill();
-                    // puff 2 (deslocado)
-                    ctx.beginPath();
-                    ctx.arc(smokeBaseX + 12, smokeBaseY - 8, 8, 0, Math.PI * 2);
-                    ctx.fill();
-                    // puff 3 (mais alto e maior)
-                    ctx.beginPath();
-                    ctx.arc(smokeBaseX - 8, smokeBaseY - 16, 12, 0, Math.PI * 2);
-                    ctx.fill();
-                });
-
-                // Pequena base/fundação para não parecer "a flutuar"
-                ctx.beginPath();
-                ctx.moveTo(f.x, baseY);
-                ctx.lineTo(f.x + f.w, baseY);
-                ctx.lineTo(f.x + f.w, baseY + 1);
-                ctx.lineTo(f.x, baseY + 1);
-                ctx.closePath();
-                ctx.fillStyle = '#6a7680';
-                ctx.fill();
-
-                // Sombra de contacto para assentar no "chão" distante
-                ctx.save();
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
-                ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
-                ctx.shadowBlur = 6;
-                ctx.shadowOffsetY = 1;
-                ctx.fillRect(f.x, baseY - 1, f.w, 5);
-                ctx.restore();
-            });
-
-            // Planalto/terreno distante para ligar a base das fábricas ao horizonte
-            const groundGrad = ctx.createLinearGradient(0, baseY, 0, 420);
-            groundGrad.addColorStop(0, 'rgba(100, 115, 125, 0.45)');
-            groundGrad.addColorStop(1, 'rgba(100, 115, 125, 0.0)');
-            ctx.fillStyle = groundGrad;
-            ctx.fillRect(720, baseY, canvas.width - 720, 420 - baseY);
-
-            // Haze/névoa subtil à frente das fábricas para profundidade
-            const hazeTop = baseY - 12;
-            const hazeBottom = 420;
-            const hazeGrad = ctx.createLinearGradient(0, hazeTop, 0, hazeBottom);
-            hazeGrad.addColorStop(0, 'rgba(200, 220, 235, 0.08)');
-            hazeGrad.addColorStop(1, 'rgba(200, 220, 235, 0)');
-            ctx.globalAlpha = 1.0;
-            ctx.fillStyle = hazeGrad;
-            ctx.fillRect(720, hazeTop, canvas.width - 720, hazeBottom - hazeTop);
-
-            ctx.restore();
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR O CHÃO =====
-        function drawGround() {
-            ctx.beginPath();
-            ctx.moveTo(0, 420);
-            ctx.lineTo(canvas.width, 420);
-            ctx.lineTo(canvas.width, 545);
-            ctx.lineTo(0, 545);
-            ctx.closePath();
-            ctx.fillStyle = '#7a8a99';
-            ctx.fill();
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR A ESTRADA =====
-        function drawRoad() {
-            ctx.beginPath();
-            ctx.moveTo(0, 470);
-            ctx.lineTo(canvas.width, 470);
-            ctx.lineTo(canvas.width, 530);
-            ctx.lineTo(0, 530);
-            ctx.closePath();
-            ctx.fillStyle = '#444c5a';
-            ctx.fill();
-            
-            ctx.strokeStyle = '#cfd7e6';
-            ctx.setLineDash([18, 14]);
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(0, 500);
-            ctx.lineTo(canvas.width, 500);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR UMA JANELA =====
-        function drawWindow(x, y, width, height) {
-            // Vidro da janela (retângulo com cantos arredondados usando arcs)
-            ctx.beginPath();
-            // Canto superior esquerdo arredondado
-            ctx.arc(x + 2, y + 2, 2, Math.PI, Math.PI * 1.5);
-            ctx.lineTo(x + width - 2, y);
-            // Canto superior direito arredondado
-            ctx.arc(x + width - 2, y + 2, 2, Math.PI * 1.5, 0);
-            ctx.lineTo(x + width, y + height - 2);
-            // Canto inferior direito arredondado
-            ctx.arc(x + width - 2, y + height - 2, 2, 0, Math.PI * 0.5);
-            ctx.lineTo(x + 2, y + height);
-            // Canto inferior esquerdo arredondado
-            ctx.arc(x + 2, y + height - 2, 2, Math.PI * 0.5, Math.PI);
-            ctx.closePath();
-            
-            // Preenchimento do vidro (azul claro com gradiente)
-            const windowGradient = ctx.createLinearGradient(x, y, x + width, y + height);
-            windowGradient.addColorStop(0, '#87ceeb');
-            windowGradient.addColorStop(0.5, '#5ba3d1');
-            windowGradient.addColorStop(1, '#3a7ca5');
-            ctx.fillStyle = windowGradient;
-            ctx.fill();
-            
-            // Borda da janela
-            ctx.strokeStyle = '#2d4a5f';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Cruz no meio da janela (molduras)
-            ctx.beginPath();
-            // Linha vertical
-            ctx.moveTo(x + width / 2, y);
-            ctx.lineTo(x + width / 2, y + height);
-            // Linha horizontal
-            ctx.moveTo(x, y + height / 2);
-            ctx.lineTo(x + width, y + height / 2);
-            ctx.strokeStyle = '#2d4a5f';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            
-            // Reflexo de luz (pequeno arco)
-            ctx.beginPath();
-            ctx.arc(x + width * 0.7, y + height * 0.3, 4, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.fill();
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR UMA PORTA =====
-        function drawDoor(x, y, width, height) {
-            // Porta principal (retângulo com cantos arredondados usando arcs)
-            ctx.beginPath();
-            // Canto superior esquerdo arredondado
-            ctx.arc(x + 3, y + 3, 3, Math.PI, Math.PI * 1.5);
-            ctx.lineTo(x + width - 3, y);
-            // Canto superior direito arredondado
-            ctx.arc(x + width - 3, y + 3, 3, Math.PI * 1.5, 0);
-            ctx.lineTo(x + width, y + height);
-            // Linha direita até o chão
-            ctx.lineTo(x + width, y + height);
-            // Linha inferior (base da porta no chão)
-            ctx.lineTo(x, y + height);
-            // Linha esquerda
-            ctx.lineTo(x, y);
-            ctx.closePath();
-            
-            // Preenchimento da porta (marrom escuro)
-            const doorGradient = ctx.createLinearGradient(x, y, x + width, y + height);
-            doorGradient.addColorStop(0, '#4a3a2a');
-            doorGradient.addColorStop(0.5, '#3d2f21');
-            doorGradient.addColorStop(1, '#2a1f15');
-            ctx.fillStyle = doorGradient;
-            ctx.fill();
-            
-            // Borda da porta
-            ctx.strokeStyle = '#1a1510';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Maçaneta (pequeno círculo usando arc)
-            ctx.beginPath();
-            ctx.arc(x + width * 0.85, y + height * 0.5, 3, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fillStyle = '#d4af37';
-            ctx.fill();
-            
-            // Reflexo de luz na porta (pequeno arco)
-            ctx.beginPath();
-            ctx.arc(x + width * 0.3, y + height * 0.3, 6, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            ctx.fill();
-        }
-        
-        // ===== FUNÇÃO PARA DESENHAR OS EDIFÍCIOS =====
-        function drawBuildings() {
-            buildings.forEach((building, i) => {
-                // Desenha o corpo principal do edifício
-                ctx.beginPath();
-                ctx.moveTo(building.x, 420);
-                ctx.lineTo(building.x + building.w, 420);
-                ctx.lineTo(building.x + building.w, 420 - building.h);
-                ctx.lineTo(building.x, 420 - building.h);
-                ctx.closePath();
-                ctx.fillStyle = colors[i % 3];
-                ctx.fill();
-                
-                // Desenha janelas
-                const windowWidth = 18;
-                const windowHeight = 24;
-                const windowSpacing = 8;
-                const windowsPerRow = Math.floor((building.w - 20) / (windowWidth + windowSpacing));
-                const numRows = Math.floor((building.h - 60) / (windowHeight + windowSpacing));
-                
-                // Calcula posição inicial para centralizar as janelas
-                const totalWindowsWidth = windowsPerRow * windowWidth + (windowsPerRow - 1) * windowSpacing;
-                const startX = building.x + (building.w - totalWindowsWidth) / 2;
-                const totalWindowsHeight = numRows * windowHeight + (numRows - 1) * windowSpacing;
-                const startY = 420 - building.h + 20;
-                
-                // Desenha as janelas em grid
-                for (let row = 0; row < numRows; row++) {
-                    for (let col = 0; col < windowsPerRow; col++) {
-                        const windowX = startX + col * (windowWidth + windowSpacing);
-                        const windowY = startY + row * (windowHeight + windowSpacing);
-                        drawWindow(windowX, windowY, windowWidth, windowHeight);
-                    }
-                }
-                
-                // Desenha a porta (centralizada na base do edifício)
-                const doorWidth = 24;
-                const doorHeight = 40;
-                const doorX = building.x + (building.w - doorWidth) / 2;
-                const doorY = 419 - doorHeight;
-                drawDoor(doorX, doorY, doorWidth, doorHeight);
-            });
-        }
-
-        // ===== HIGHLIGHT DO TELHADO =====
-        function drawRoofHighlight(building, elapsedMs) {
+        // ===== CÁLCULO DA ZONA-ALVO DO TELHADO PARA UM PAINEL =====
+        function getRoofTargetRect(building) {
+            // Reutiliza a mesma área do highlight do telhado
             const roofY = 420 - building.h;
             const paddingX = 8;
             const zoneHeight = 18;
@@ -1261,44 +761,25 @@ Recriar/explicacao_projeto.txt
             const y = roofY - zoneHeight - 4;
             const w = building.w - paddingX * 2;
             const h = zoneHeight;
+            return { x, y, w, h };
+        }
 
-            const t = (elapsedMs || 0) / 1000;
-            const pulse = 0.5 + 0.5 * Math.sin(t * 2 * Math.PI); // 0..1
+        // Verifica se o centro do painel está dentro da zona alvo do seu prédio
+        function isPanelCorrectlyPlaced(panel) {
+            const b = buildings[panel.buildingIndex];
+            if (!b) return false;
+            const r = getRoofTargetRect(b);
+            const centerX = panel.x + panel.width / 2;
+            const centerY = panel.y + panel.height / 2;
+            return centerX >= r.x && centerX <= r.x + r.w && centerY >= r.y && centerY <= r.y + r.h;
+        }
 
-            // Glow de fundo
-            const grad = ctx.createLinearGradient(x, y, x, y + h);
-            grad.addColorStop(0, `rgba(0, 200, 255, ${0.10 + 0.10 * pulse})`);
-            grad.addColorStop(1, `rgba(0, 255, 170, ${0.18 + 0.12 * pulse})`);
-            ctx.fillStyle = grad;
-            ctx.fillRect(x, y, w, h);
-
-            // Borda animada tracejada
-            ctx.save();
-            ctx.strokeStyle = `rgba(0, 255, 200, ${0.8})`;
-            ctx.lineWidth = 2 + pulse; // 2..3
-            ctx.setLineDash([10, 6]);
-            ctx.lineDashOffset = -dashOffset;
-            ctx.beginPath();
-            ctx.rect(x + 1, y + 1, w - 2, h - 2);
-            ctx.stroke();
-            ctx.restore();
-
-            // Listras diagonais sutis em movimento
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x, y, w, h);
-            ctx.clip();
-            ctx.strokeStyle = `rgba(0, 240, 180, ${0.15 + 0.15 * pulse})`;
-            ctx.lineWidth = 6;
-            const stripeSpacing = 16;
-            const offset = (dashOffset % stripeSpacing);
-            for (let sx = x - h; sx < x + w + h; sx += stripeSpacing) {
-                ctx.beginPath();
-                ctx.moveTo(sx + offset, y);
-                ctx.lineTo(sx + h + offset, y + h);
-                ctx.stroke();
-            }
-            ctx.restore();
+        // Recalcula a mitigação total com base nos painéis colocados corretamente
+        function recalcMitigation() {
+            const placedCount = solarPanels.reduce((acc, p) => acc + (p.isPlacedCorrectly ? 1 : 0), 0);
+            mitigationFromPanels = placedCount * 0.15;  // ~15% por painel, 4 painéis ≈ 60%
+            // extraMitigation é definido pelo autocarro quando colocado na estrada
+            totalMitigation = Math.min(0.75, mitigationFromPanels + extraMitigation); // cap suave a 75%
         }
         
         // ===== FUNÇÃO PARA DESENHAR UM PAINEL SOLAR =====
@@ -1399,8 +880,16 @@ Recriar/explicacao_projeto.txt
             cloudPositions.forEach(c => drawCloud(c.x, c.y, c.s));
             // Fábricas distantes (atrás do primeiro plano)
             drawFactories();
+            // Fumo das fábricas (atrás do primeiro plano, antes do chão/estrada)
+            if (elapsedMs !== undefined && lastFrameTs !== 0) {
+                // desenhado no loop principal após atualização; aqui apenas garante ordem
+            }
             drawGround();
             drawRoad();
+            // Desenhar autocarro (sobre a estrada, antes dos carros em movimento)
+            drawBus(bus);
+            // Carros e respetivo fumo ficam sobre a estrada
+            // (o desenho real é feito no loop de animação para manter ordem correta)
             drawBuildings();
             
             // Highlight do telhado (por cima dos prédios, antes dos painéis)
@@ -1413,6 +902,30 @@ Recriar/explicacao_projeto.txt
             if (showPanelsCheckbox.checked) {
                 solarPanels.forEach(panel => drawSolarPanel(panel));
             }
+        }
+
+        // ===== LOOP DE ANIMAÇÃO CONTÍNUA =====
+        function mainLoop(ts) {
+            if (!lastFrameTs) lastFrameTs = ts;                 // inicializar delta
+            const dtMs = Math.min(50, ts - lastFrameTs);        // limitar dt para estabilidade
+            lastFrameTs = ts;                                   // guardar timestamp
+
+            // Atualizar offset para highlight, mesmo que não esteja ativo
+            if (animationStartTs === null) animationStartTs = ts; // base do tempo
+            const elapsed = ts - animationStartTs;              // tempo decorrido
+            dashOffset = (elapsed / 16) % 100;                  // offset animado
+
+            // Spawn de fumo das fábricas (antes de desenhar)
+            spawnFactorySmoke(dtMs);
+
+            // Redesenhar base da cena
+            drawScene(elapsed);
+
+            // Desenhar/atualizar camadas dinâmicas na ordem correta
+            updateAndDrawCars(dtMs, ts);                        // carros sobre a estrada
+            updateAndDrawSmoke(dtMs);                           // fumo por cima dos carros
+
+            requestAnimationFrame(mainLoop);                    // próximo frame
         }
         
         // ===== FUNÇÕES DE INTERAÇÃO (DRAG AND DROP) =====
@@ -1428,26 +941,41 @@ Recriar/explicacao_projeto.txt
             return x >= panel.x && x <= panel.x + panel.width &&
                    y >= panel.y && y <= panel.y + panel.height;
         }
+
+        function isPointInBus(x, y, obj) {
+            if (!obj.visible) return false;
+            return x >= obj.x - obj.w * 0.5 && x <= obj.x + obj.w * 0.5 &&
+                   y >= obj.y - obj.h * 0.5 && y <= obj.y + obj.h * 0.5;
+        }
         
-        // Evento de mouse down - inicia o drag
+        // Evento de mouse down - inicia o drag (paineis e autocarro)
         canvas.addEventListener('mousedown', (e) => {
-            if (!showPanelsCheckbox.checked) return;
-            
             const mousePos = getMousePos(e);
-            
-            // Verifica qual painel foi clicado
-            for (let panel of solarPanels) {
-                if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
-                    draggedPanel = panel;
-                    panel.isDragging = true;
-                    panel.dragOffsetX = mousePos.x - panel.x;
-                    panel.dragOffsetY = mousePos.y - panel.y;
-                    canvas.style.cursor = 'grabbing';
-                    // Ativa highlight temporário do prédio alvo durante o drag
-                    highlightedBuildingIndex = panel.buildingIndex;
-                    if (!animationActive) startHighlightAnimation();
-                    break;
+
+            // Paineis
+            if (showPanelsCheckbox.checked) {
+                for (let panel of solarPanels) {
+                    if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
+                        draggedPanel = panel;
+                        panel.isDragging = true;
+                        panel.dragOffsetX = mousePos.x - panel.x;
+                        panel.dragOffsetY = mousePos.y - panel.y;
+                        canvas.style.cursor = 'grabbing';
+                        // Ativa highlight temporário do prédio alvo durante o drag
+                        highlightedBuildingIndex = panel.buildingIndex;
+                        if (!animationActive) startHighlightAnimation();
+                        return;
+                    }
                 }
+            }
+
+            // Autocarro
+            if (showBusCheckbox.checked && isPointInBus(mousePos.x, mousePos.y, bus)) {
+                bus.isDragging = true;
+                bus.dragOffsetX = mousePos.x - bus.x;
+                bus.dragOffsetY = mousePos.y - bus.y;
+                canvas.style.cursor = 'grabbing';
+                return;
             }
         });
         
@@ -1459,7 +987,11 @@ Recriar/explicacao_projeto.txt
                 draggedPanel.x = mousePos.x - draggedPanel.dragOffsetX;
                 draggedPanel.y = mousePos.y - draggedPanel.dragOffsetY;
                 drawScene();
-            } else if (showPanelsCheckbox.checked) {
+            } else if (bus.isDragging) {
+                bus.x = mousePos.x - bus.dragOffsetX;
+                bus.y = mousePos.y - bus.dragOffsetY;
+                drawScene();
+            } else if (showPanelsCheckbox.checked || showBusCheckbox.checked) {
                 // Muda cursor se estiver sobre um painel
                 let overPanel = false;
                 for (let panel of solarPanels) {
@@ -1468,7 +1000,8 @@ Recriar/explicacao_projeto.txt
                         break;
                     }
                 }
-                canvas.style.cursor = overPanel ? 'grab' : 'default';
+                const overBus = isPointInBus(mousePos.x, mousePos.y, bus);
+                canvas.style.cursor = (overPanel || overBus) ? 'grab' : 'default';
             }
         });
         
@@ -1482,7 +1015,29 @@ Recriar/explicacao_projeto.txt
                 if (!highlightPinned) {
                     highlightedBuildingIndex = null;
                 }
+                // Atualiza estado de colocação correta e recalcula mitigação
+                solarPanels.forEach(p => {
+                    p.isPlacedCorrectly = isPanelCorrectlyPlaced(p);
+                });
+                recalcMitigation();
                 if (!animationActive) stopHighlightAnimationIfIdle();
+                drawScene();
+            }
+
+            if (bus.isDragging) {
+                bus.isDragging = false;
+                canvas.style.cursor = 'default';
+                const r = getRoadRect();
+                const centerY = bus.y;
+                const onRoad = centerY >= r.y1 && centerY <= r.y2;
+                bus.placedOnRoad = onRoad;
+                if (onRoad) {
+                    // alinhar suavemente ao centro da estrada
+                    bus.y = (r.y1 + r.y2) / 2 - 5;
+                }
+                // atualizar extraMitigation com base no autocarro
+                extraMitigation = (showBusCheckbox.checked && bus.placedOnRoad) ? 0.15 : 0.0; // +15% => 60% -> 75%
+                recalcMitigation();
                 drawScene();
             }
         });
@@ -1501,6 +1056,26 @@ Recriar/explicacao_projeto.txt
             if (!showPanelsCheckbox.checked) {
                 highlightedBuildingIndex = null;
                 highlightPinned = false;
+                // Ao esconder painéis, considerar que não mitigam
+                solarPanels.forEach(p => p.isPlacedCorrectly = false);
+                recalcMitigation();
+            }
+            drawScene();
+        });
+
+        // Checkbox do autocarro
+        showBusCheckbox.addEventListener('change', () => {
+            bus.visible = showBusCheckbox.checked;
+            if (!bus.visible) {
+                // reset estado quando desliga
+                bus.isDragging = false;
+                bus.placedOnRoad = false;
+                extraMitigation = 0.0;
+                recalcMitigation();
+            } else {
+                // posicionar num local inicial visível
+                bus.x = 120;
+                bus.y = canvas.height - 90;
             }
             drawScene();
         });
@@ -1530,26 +1105,8 @@ Recriar/explicacao_projeto.txt
             }
         });
         
-        // Desenha a cena inicial
-        drawScene();
-    </script>
-</body>
-</html>
-
-                    // Desativa se já estava fixo neste prédio
-                    highlightedBuildingIndex = null;
-                    highlightPinned = false;
-                } else {
-                    highlightedBuildingIndex = clickedPanel.buildingIndex;
-                    highlightPinned = true;
-                    startHighlightAnimation();
-                }
-                drawScene();
-            }
-        });
-        
-        // Desenha a cena inicial
-        drawScene();
+        // Inicia animação contínua
+        requestAnimationFrame(mainLoop); // arranca o loop principal
     </script>
 </body>
 </html>
