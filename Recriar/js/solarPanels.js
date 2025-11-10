@@ -34,7 +34,8 @@ let highlightPinned = false;
 function drawRoofHighlight(building, elapsedMs) {
     const roofY = 420 - building.h;
     const paddingX = 8;
-    const zoneHeight = 18;
+    // Aumentado de 18 para 30 para corresponder à zona de detecção
+    const zoneHeight = 30;
     const x = building.x + paddingX;
     const y = roofY - zoneHeight - 4;
     const w = building.w - paddingX * 2;
@@ -82,7 +83,11 @@ function isPanelCorrectlyPlaced(panel) {
     const r = getRoofTargetRect(b);
     const centerX = panel.x + panel.width / 2;
     const centerY = panel.y + panel.height / 2;
-    return centerX >= r.x && centerX <= r.x + r.w && centerY >= r.y && centerY <= r.y + r.h;
+    // Aumentar tolerância - verificar se o centro está na zona OU se qualquer parte do painel está na zona
+    const panelInZone = (centerX >= r.x && centerX <= r.x + r.w && centerY >= r.y && centerY <= r.y + r.h) ||
+                        (panel.x < r.x + r.w && panel.x + panel.width > r.x && 
+                         panel.y < r.y + r.h && panel.y + panel.height > r.y);
+    return panelInZone;
 }
 
 function drawSolarPanel(panel) {

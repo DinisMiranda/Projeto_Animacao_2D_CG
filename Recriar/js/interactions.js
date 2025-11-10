@@ -41,7 +41,21 @@ canvas.addEventListener('mousemove', (e) => {
     if (draggedPanel && draggedPanel.isDragging) {
         draggedPanel.x = mousePos.x - draggedPanel.dragOffsetX;
         draggedPanel.y = mousePos.y - draggedPanel.dragOffsetY;
-        drawScene();
+        // Atualizar a posição correta e recalcular mitigação em tempo real durante o drag
+        draggedPanel.isPlacedCorrectly = isPanelCorrectlyPlaced(draggedPanel);
+        // Recalcular mitigação para todos os painéis para refletir mudanças em tempo real
+        solarPanels.forEach(p => {
+            if (p !== draggedPanel) {
+                p.isPlacedCorrectly = isPanelCorrectlyPlaced(p);
+            }
+        });
+        recalcMitigation();
+        // Garantir que a animação continue rodando durante o drag
+        if (!animationActive) {
+            startHighlightAnimation();
+        }
+        // Não chamar drawScene() diretamente - deixar o animationLoop cuidar disso
+        // Isso mantém a animação do highlight funcionando
     } else if (bus && bus.isDragging) {
         bus.x = mousePos.x - bus.dragOffsetX;
         bus.y = mousePos.y - bus.dragOffsetY;

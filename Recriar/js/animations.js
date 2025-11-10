@@ -4,6 +4,7 @@
 let lastFrameTs = 0;
 let animationActive = false;
 let animationStartTs = null;
+let animationLastFrameTs = 0; // Para calcular dtMs no animationLoop
 let dashOffset = 0;
 
 // Timestamp de início da animação para o ciclo dia/noite (inicializado uma vez)
@@ -24,6 +25,11 @@ function stopHighlightAnimationIfIdle() {
 function animationLoop(ts) {
     if (!animationStartTime) animationStartTime = ts;
     if (animationStartTs === null) animationStartTs = ts;
+    if (!animationLastFrameTs) animationLastFrameTs = ts;
+    
+    // Calcular delta time para animações
+    const dtMs = Math.min(50, ts - animationLastFrameTs);
+    animationLastFrameTs = ts;
     
     const elapsed = ts - animationStartTs;
     dashOffset = (elapsed / 16) % 100;
@@ -32,14 +38,24 @@ function animationLoop(ts) {
     const elapsedTime = ts - animationStartTime;
     updateDayNightCycle(elapsedTime);
 
+    // Atualizar spawn de fumo (apenas atualiza estado, não desenha)
+    spawnFactorySmoke(dtMs);
+
     const shouldKeepAnimating = (highlightedBuildingIndex !== null && showPanelsCheckbox && showPanelsCheckbox.checked) || (draggedPanel && draggedPanel.isDragging);
     if (shouldKeepAnimating) {
         drawScene();
+        // Desenhar carros e fumo DEPOIS do drawScene para que apareçam sobre a cena
+        updateAndDrawCars(dtMs, ts);
+        updateAndDrawSmoke(dtMs);
         requestAnimationFrame(animationLoop);
     } else {
         animationActive = false;
         animationStartTs = null;
+        animationLastFrameTs = 0;
         drawScene();
+        // Desenhar carros e fumo DEPOIS do drawScene para que apareçam sobre a cena
+        updateAndDrawCars(dtMs, ts);
+        updateAndDrawSmoke(dtMs);
     }
 }
 

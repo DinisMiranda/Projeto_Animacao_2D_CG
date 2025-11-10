@@ -125,7 +125,8 @@ function drawBuildings() {
 function getRoofTargetRect(building) {
     const roofY = 420 - building.h;
     const paddingX = 8;
-    const zoneHeight = 18;
+    // Aumentado de 18 para 30 - zona maior e mais fácil de acertar
+    const zoneHeight = 30;
     const x = building.x + paddingX;
     const y = roofY - zoneHeight - 4;
     const w = building.w - paddingX * 2;
