@@ -30,6 +30,10 @@ canvas.addEventListener('mousedown', (e) => {
         bus.isDragging = true;
         bus.dragOffsetX = mousePos.x - bus.x;
         bus.dragOffsetY = mousePos.y - bus.y;
+        bus.autoDrive = false;
+        bus.placedOnRoad = false;
+        extraMitigation = 0.0;
+        recalcMitigation();
         canvas.style.cursor = 'grabbing';
         return;
     }
@@ -97,7 +101,10 @@ canvas.addEventListener('mouseup', () => {
         const onRoad = centerY >= r.y1 && centerY <= r.y2;
         bus.placedOnRoad = onRoad;
         if (onRoad) {
-            bus.y = (r.y1 + r.y2) / 2 - 5;
+            alignBusToLane(centerY);
+            bus.autoDrive = true;
+        } else {
+            bus.autoDrive = false;
         }
         extraMitigation = (showBusCheckbox && showBusCheckbox.checked && bus && bus.placedOnRoad) ? 0.15 : 0.0;
         recalcMitigation();
@@ -132,11 +139,15 @@ if (showBusCheckbox) {
         if (!bus.visible) {
             bus.isDragging = false;
             bus.placedOnRoad = false;
+            bus.autoDrive = false;
             extraMitigation = 0.0;
             recalcMitigation();
         } else {
             bus.x = 120;
             bus.y = canvas.height - 90;
+            bus.targetLaneY = bus.y;
+            bus.autoDrive = false;
+            bus.placedOnRoad = false;
         }
         drawScene();
     });
@@ -162,6 +173,12 @@ canvas.addEventListener('click', (e) => {
             startHighlightAnimation();
         }
         drawScene();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if ((e.key && e.key.toLowerCase() === 'r') || e.code === 'KeyR') {
+        resetAnimationState();
     }
 });
 

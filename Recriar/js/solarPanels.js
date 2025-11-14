@@ -165,3 +165,11 @@ function isPointInPanel(x, y, panel) {
            y >= panel.y && y <= panel.y + panel.height;
 }
 
+function resetSolarPanels() {
+    initSolarPanels();
+    highlightedBuildingIndex = null;
+    highlightPinned = false;
+    draggedPanel = null;
+    solarPanels.forEach(p => p.isPlacedCorrectly = false);
+}
+

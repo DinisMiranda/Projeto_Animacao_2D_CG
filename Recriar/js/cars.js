@@ -6,6 +6,7 @@ const baseExhaustInterval = 120;
 
 // ===== AUTOCARRO (drag-and-drop para a estrada) =====
 let bus = null;
+const BUS_WRAP_MARGIN = 80;
 
 function initBus() {
     bus = {
@@ -17,7 +18,12 @@ function initBus() {
         dragOffsetX: 0,
         dragOffsetY: 0,
         placedOnRoad: false,
-        visible: false
+        visible: false,
+        dir: 1,
+        speed: 0.18,
+        lane: 0,
+        targetLaneY: canvas.height - 90,
+        autoDrive: false
     };
 }
 
@@ -54,6 +60,42 @@ function drawRoad() {
 
 function getRoadRect() {
     return { y1: 470, y2: 530 };
+}
+
+function getBusLaneCenters() {
+    const r = getRoadRect();
+    const laneHeight = (r.y2 - r.y1) / 2;
+    return [
+        r.y1 + laneHeight * 0.5,
+        r.y1 + laneHeight * 1.5
+    ];
+}
+
+function alignBusToLane(referenceY) {
+    if (!bus) return;
+    const r = getRoadRect();
+    const laneCenters = getBusLaneCenters();
+    const midRoad = (r.y1 + r.y2) * 0.5;
+    const useTopLane = referenceY <= midRoad;
+    bus.lane = useTopLane ? 0 : 1;
+    bus.dir = useTopLane ? 1 : -1;
+    bus.targetLaneY = laneCenters[bus.lane];
+    bus.y = bus.targetLaneY;
+}
+
+function updateBus(dtMs) {
+    if (!bus || !bus.visible || bus.isDragging || !bus.placedOnRoad || !bus.autoDrive) return;
+    bus.x += bus.speed * bus.dir * dtMs;
+
+    if (bus.dir > 0 && bus.x - bus.w * 0.5 > canvas.width + BUS_WRAP_MARGIN) {
+        bus.x = -BUS_WRAP_MARGIN;
+    } else if (bus.dir < 0 && bus.x + bus.w * 0.5 < -BUS_WRAP_MARGIN) {
+        bus.x = canvas.width + BUS_WRAP_MARGIN;
+    }
+
+    if (typeof bus.targetLaneY === 'number') {
+        bus.y += (bus.targetLaneY - bus.y) * 0.2;
+    }
 }
 
 function drawBus(obj) {
@@ -167,5 +209,10 @@ function isPointInBus(x, y, obj) {
     if (!obj || !obj.visible) return false;
     return x >= obj.x - obj.w * 0.5 && x <= obj.x + obj.w * 0.5 &&
            y >= obj.y - obj.h * 0.5 && y <= obj.y + obj.h * 0.5;
+}
+
+function resetCars() {
+    cars.length = 0;
+    nextCarSpawnTs = 0;
 }
 

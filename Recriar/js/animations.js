@@ -40,6 +40,7 @@ function animationLoop(ts) {
 
     // Atualizar spawn de fumo (apenas atualiza estado, não desenha)
     spawnFactorySmoke(dtMs);
+    updateBus(dtMs);
 
     const shouldKeepAnimating = (highlightedBuildingIndex !== null && showPanelsCheckbox && showPanelsCheckbox.checked) || (draggedPanel && draggedPanel.isDragging);
     if (shouldKeepAnimating) {
@@ -104,9 +105,46 @@ function mainLoop(ts) {
     updateDayNightCycle(elapsedTime);
 
     spawnFactorySmoke(dtMs);
+    updateBus(dtMs);
     drawScene();
     updateAndDrawCars(dtMs, ts);
     updateAndDrawSmoke(dtMs);
     requestAnimationFrame(mainLoop);
+}
+
+function resetAnimationState() {
+    lastFrameTs = 0;
+    animationStartTs = null;
+    animationLastFrameTs = 0;
+    animationStartTime = null;
+    dashOffset = 0;
+
+    if (showPanelsCheckbox) {
+        showPanelsCheckbox.checked = false;
+    }
+    if (showBusCheckbox) {
+        showBusCheckbox.checked = false;
+    }
+
+    if (typeof resetCars === 'function') {
+        resetCars();
+    }
+    if (typeof resetSmoke === 'function') {
+        resetSmoke();
+    }
+    if (typeof resetSolarPanels === 'function') {
+        resetSolarPanels();
+    }
+    if (typeof initBus === 'function') {
+        initBus();
+        bus.visible = false;
+        bus.autoDrive = false;
+        bus.placedOnRoad = false;
+    }
+
+    extraMitigation = 0.0;
+    recalcMitigation();
+    generateStars();
+    drawScene();
 }
 

@@ -80,3 +80,7 @@ function updateAndDrawSmoke(dtMs) {
     });
 }
 
+function resetSmoke() {
+    smokeParticles.length = 0;
+}
+
