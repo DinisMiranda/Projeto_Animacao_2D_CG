@@ -12,10 +12,16 @@ const cloudPositions = [
 // Array com posições das estrelas (geradas aleatoriamente)
 let starPositions = [];
 
+// Configuração geométrica do céu
+const SKY_HORIZON_Y = 420;
+const SUN_DRAW_RADIUS = 26;
+const MOON_DRAW_RADIUS = 24;
+const skyOrbitConfig = computeSkyOrbitConfig();
+
 // Configuração do ciclo dia/noite
-const DAY_NIGHT_CYCLE_DURATION = 60000; // 60 segundos para um ciclo completo (30s dia + 30s noite)
-const DAY_DURATION = DAY_NIGHT_CYCLE_DURATION / 2; // 30 segundos de dia
-const NIGHT_DURATION = DAY_NIGHT_CYCLE_DURATION / 2; // 30 segundos de noite
+const DAY_NIGHT_CYCLE_DURATION = 120000; // 120 segundos para um ciclo completo (60s dia + 60s noite)
+const DAY_DURATION = DAY_NIGHT_CYCLE_DURATION / 2; // 60 segundos de dia
+const NIGHT_DURATION = DAY_NIGHT_CYCLE_DURATION / 2; // 60 segundos de noite
 const TRANSITION_DURATION = 3000; // 3 segundos de transição entre dia e noite
 
 // Variável para controlar se é noite (calculada dinamicamente)
@@ -86,6 +92,42 @@ function smoothStep(t) {
     t = Math.max(0, Math.min(1, t));
     // Curva suave: 3t² - 2t³
     return t * t * (3 - 2 * t);
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function computeSkyOrbitConfig() {
+    const horizonY = SKY_HORIZON_Y;
+    const hasBuildings = typeof buildings !== 'undefined' && Array.isArray(buildings) && buildings.length > 0;
+    const leftMostX = hasBuildings ? buildings.reduce((min, b) => Math.min(min, b.x), buildings[0].x) : 80;
+    const sunriseX = clamp(leftMostX - 40, 30, (canvas ? canvas.width : 1100) * 0.2);
+    const canvasWidth = canvas ? canvas.width : 1100;
+    const sunsetX = Math.max(sunriseX + 220, canvasWidth - 60);
+    const centerX = (sunriseX + sunsetX) / 2;
+    const halfWidth = (sunsetX - sunriseX) / 2;
+    const maxSunArc = horizonY - 110; // garante topo do sol próximo das nuvens
+    const sunArcHeight = Math.min(halfWidth * 0.7, maxSunArc);
+    const moonArcHeight = sunArcHeight * 0.85;
+    return { horizonY, sunriseX, sunsetX, centerX, halfWidth, sunArcHeight, moonArcHeight };
+}
+
+function computeSunAngle(normalizedPos) {
+    if (normalizedPos < 0.5) {
+        const dayProgress = normalizedPos / 0.5; // 0 = nascer, 1 = pôr do sol
+        return Math.PI * (1 - dayProgress);
+    }
+    const nightProgress = (normalizedPos - 0.5) / 0.5; // 0 = pôr do sol, 1 = madrugada
+    return -Math.PI * nightProgress;
+}
+
+function wrapAngle(angle) {
+    const twoPi = Math.PI * 2;
+    angle = angle % twoPi;
+    if (angle <= -Math.PI) angle += twoPi;
+    if (angle > Math.PI) angle -= twoPi;
+    return angle;
 }
 
 // Função para gerar posições das estrelas
@@ -179,45 +221,26 @@ function drawSun() {
     // Garantir que timeOfDay está definido
     if (typeof timeOfDay === 'undefined') return;
     
-    // Mover o sol durante o ciclo (nascer e pôr do sol)
-    // timeOfDay já está entre 0 e 1, usar diretamente
-    let normalizedPos = timeOfDay;
-    if (normalizedPos < 0) normalizedPos = 0;
-    if (normalizedPos >= 1) normalizedPos = 0.999999;
+    const normalizedPos = clamp(timeOfDay, 0, 0.999999);
+    const { centerX, halfWidth, sunArcHeight, horizonY } = skyOrbitConfig;
     
-    let sunX, sunY;
-    let sunRadius = 26;
+    const sunAngle = computeSunAngle(normalizedPos);
+    const sunCos = Math.cos(sunAngle);
+    const sunSin = Math.sin(sunAngle);
     
-    // Calcular posição do sol baseado no ciclo
-    if (normalizedPos <= 0.25) {
-        // Manhã: sol sobe (0 a 0.25)
-        const progress = normalizedPos / 0.25;
-        sunX = 200 + (900 - 200) * progress;
-        sunY = 420 - (420 - 120) * progress;
-        sunRadius = 26 + Math.sin(progress * Math.PI) * 2;
-    } else if (normalizedPos <= 0.5) {
-        // Meio-dia para tarde: sol desce (0.25 a 0.5)
-        const progress = (normalizedPos - 0.25) / 0.25;
-        sunX = 900 + (1100 - 900) * progress;
-        sunY = 120 + (420 - 120) * progress;
-        sunRadius = 26 - Math.sin(progress * Math.PI) * 2;
-    } else if (normalizedPos <= 0.75) {
-        // Noite: sol está abaixo do horizonte mas ainda podemos desenhar com alpha muito baixo
-        // Usar posição abaixo do horizonte
-        const progress = (normalizedPos - 0.5) / 0.25;
-        sunX = 1100 - (1100 - 200) * progress;
-        sunY = 420 + 50; // Abaixo do horizonte
-        sunRadius = 20;
-    } else {
-        // Madrugada: sol nasce (0.75 a 1.0)
-        const progress = (normalizedPos - 0.75) / 0.25;
-        sunX = 200 - (200 - 0) * (1 - progress);
-        sunY = 420 - (420 - 120) * progress;
-        sunRadius = 26 + Math.sin(progress * Math.PI) * 2;
+    const sunX = centerX + sunCos * halfWidth;
+    const sunElevation = Math.max(sunSin, 0);
+    if (sunElevation <= 0 && sunAlpha <= 0.2) {
+        return;
     }
+    const sunY = horizonY - sunElevation * sunArcHeight;
+    const sunRadius = SUN_DRAW_RADIUS;
+    
+    const elevation = clamp(sunElevation, 0, 1);
+    const isSunset = sunCos > 0 && elevation < 0.6;
 
     ctx.save();
-    ctx.globalAlpha = Math.max(0, Math.min(1, sunAlpha));
+    ctx.globalAlpha = clamp(sunAlpha, 0, 1);
     ctx.shadowColor = 'rgba(255, 183, 3, 0.4)';
     ctx.shadowBlur = 20;
 
@@ -227,13 +250,18 @@ function drawSun() {
 
     // Mudar cor do sol durante pôr/nascer do sol
     let sunColor1, sunColor2, sunColor3;
-    if (normalizedPos > 0.2 && normalizedPos < 0.3) {
-        // Pôr do sol: tons laranja/vermelho
-        sunColor1 = '#ff6b35';
-        sunColor2 = '#ff8c42';
-        sunColor3 = '#ff6b35';
-    } else if (normalizedPos > 0.7 && normalizedPos < 0.8) {
-        // Nascer do sol: tons laranja/amarelo
+    if (elevation < 0.25) {
+        if (isSunset) {
+            sunColor1 = '#ff6b35';
+            sunColor2 = '#ff8c42';
+            sunColor3 = '#ff6b35';
+        } else {
+            sunColor1 = '#ff8c42';
+            sunColor2 = '#ffb703';
+            sunColor3 = '#ff8f00';
+        }
+    } else if (elevation < 0.6) {
+        // Sol a meia altura: misto quente
         sunColor1 = '#ff8c42';
         sunColor2 = '#ffb703';
         sunColor3 = '#ff8f00';
@@ -275,40 +303,25 @@ function drawMoon() {
     // Garantir que timeOfDay está definido
     if (typeof timeOfDay === 'undefined') return;
     
-    // Posição da lua no céu (move-se durante a noite)
-    // timeOfDay já está entre 0 e 1, usar diretamente
-    let normalizedPos = timeOfDay;
-    if (normalizedPos < 0) normalizedPos = 0;
-    if (normalizedPos >= 1) normalizedPos = 0.999999;
+    const normalizedPos = clamp(timeOfDay, 0, 0.999999);
+    const { centerX, halfWidth, moonArcHeight, horizonY } = skyOrbitConfig;
     
-    let moonX, moonY;
-    const moonRadius = 24;
+    const sunAngle = computeSunAngle(normalizedPos);
+    const moonAngle = wrapAngle(sunAngle - Math.PI);
+    const moonCos = Math.cos(moonAngle);
+    const moonSin = Math.sin(moonAngle);
+    const moonElevation = Math.max(moonSin, 0);
     
-    // Calcular posição da lua baseado no ciclo
-    // A lua aparece gradualmente durante a transição e fica visível durante a noite
-    if (normalizedPos < 0.2) {
-        // Dia completo: lua não visível
+    if (moonElevation <= 0 && moonAlpha <= 0.2) {
         return;
-    } else if (normalizedPos <= 0.5) {
-        // Transição para noite + primeira metade da noite: lua sobe (0.2 a 0.5)
-        const progress = (normalizedPos - 0.2) / 0.3;
-        moonX = 1100 - (1100 - 850) * progress;
-        moonY = 420 - (420 - 100) * progress;
-    } else if (normalizedPos <= 0.8) {
-        // Segunda metade da noite: lua desce (0.5 a 0.8)
-        const progress = (normalizedPos - 0.5) / 0.3;
-        moonX = 850 - (850 - 200) * progress;
-        moonY = 100 + (420 - 100) * progress;
-    } else {
-        // Transição para dia: lua desaparece (0.8 a 1.0)
-        // Ainda visível mas desaparecendo gradualmente
-        const progress = (normalizedPos - 0.8) / 0.2;
-        moonX = 200 - (200 - 0) * progress;
-        moonY = 420 + 30; // Abaixo do horizonte
     }
     
+    const moonX = centerX + moonCos * halfWidth;
+    const moonY = horizonY - moonElevation * moonArcHeight;
+    const moonRadius = MOON_DRAW_RADIUS;
+    
     ctx.save();
-    ctx.globalAlpha = Math.max(0, Math.min(1, moonAlpha));
+    ctx.globalAlpha = clamp(moonAlpha, 0, 1);
 
     // Halo suave ao redor da lua
     ctx.save();

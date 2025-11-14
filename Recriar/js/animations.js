@@ -41,6 +41,11 @@ function animationLoop(ts) {
     // Atualizar spawn de fumo (apenas atualiza estado, não desenha)
     spawnFactorySmoke(dtMs);
     updateBus(dtMs);
+    
+    // Atualizar boost de sorriso (deteção facial)
+    if (typeof updateSmileBoost !== 'undefined') {
+        updateSmileBoost(dtMs);
+    }
 
     const shouldKeepAnimating = (highlightedBuildingIndex !== null && showPanelsCheckbox && showPanelsCheckbox.checked) || (draggedPanel && draggedPanel.isDragging);
     if (shouldKeepAnimating) {
@@ -106,6 +111,11 @@ function mainLoop(ts) {
 
     spawnFactorySmoke(dtMs);
     updateBus(dtMs);
+    
+    // Atualizar boost de sorriso (deteção facial)
+    if (typeof updateSmileBoost !== 'undefined') {
+        updateSmileBoost(dtMs);
+    }
     drawScene();
     updateAndDrawCars(dtMs, ts);
     updateAndDrawSmoke(dtMs);
