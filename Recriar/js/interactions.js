@@ -1,5 +1,18 @@
-// ===== MÓDULO: INTERAÇÕES E EVENTOS =====
+/**
+ * SISTEMA DE INTERAÇÕES E EVENTOS
+ * 
+ * Este módulo gerencia todas as interações do usuário:
+ * - Drag and drop de painéis solares
+ * - Drag and drop do autocarro
+ * - Detecção de colisão e posicionamento correto
+ * - Atualização de mitigação em tempo real durante o drag
+ * - Eventos de mouse (mousedown, mousemove, mouseup, click)
+ * - Eventos de teclado (reset com 'R')
+ */
 
+/**
+ * Converte coordenadas do mouse do espaço da página para o espaço do canvas
+ */
 function getMousePos(e) {
     const rect = canvas.getBoundingClientRect();
     return {
@@ -8,30 +21,40 @@ function getMousePos(e) {
     };
 }
 
+/**
+ * Evento: Mouse pressionado
+ * Inicia o drag de painéis solares ou autocarro se o mouse estiver sobre eles
+ */
 canvas.addEventListener('mousedown', (e) => {
     const mousePos = getMousePos(e);
 
+    // Verifica se clicou em um painel solar
     if (showPanelsCheckbox && showPanelsCheckbox.checked) {
         for (let panel of solarPanels) {
             if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
                 draggedPanel = panel;
                 panel.isDragging = true;
+                // Guarda o offset para manter a posição relativa durante o drag
                 panel.dragOffsetX = mousePos.x - panel.x;
                 panel.dragOffsetY = mousePos.y - panel.y;
                 canvas.style.cursor = 'grabbing';
+                // Destaca o edifício correspondente
                 highlightedBuildingIndex = panel.buildingIndex;
+                // Inicia animação se necessário
                 if (!animationActive) startHighlightAnimation();
                 return;
             }
         }
     }
 
+    // Verifica se clicou no autocarro
     if (showBusCheckbox && showBusCheckbox.checked && bus && isPointInBus(mousePos.x, mousePos.y, bus)) {
         bus.isDragging = true;
         bus.dragOffsetX = mousePos.x - bus.x;
         bus.dragOffsetY = mousePos.y - bus.y;
         bus.autoDrive = false;
         bus.placedOnRoad = false;
+        // Remove mitigação do autocarro enquanto está sendo arrastado
         extraMitigation = 0.0;
         recalcMitigation();
         canvas.style.cursor = 'grabbing';
@@ -39,41 +62,57 @@ canvas.addEventListener('mousedown', (e) => {
     }
 });
 
+/**
+ * Evento: Mouse em movimento
+ * Atualiza posição durante o drag e verifica se está sobre elementos interativos
+ */
 canvas.addEventListener('mousemove', (e) => {
     const mousePos = getMousePos(e);
 
+    // Drag de painel solar
     if (draggedPanel && draggedPanel.isDragging) {
+        // Atualiza posição do painel
         draggedPanel.x = mousePos.x - draggedPanel.dragOffsetX;
         draggedPanel.y = mousePos.y - draggedPanel.dragOffsetY;
-        // Atualizar a posição correta e recalcular mitigação em tempo real durante o drag
+        
+        // Verifica se está na posição correta (no telhado)
         draggedPanel.isPlacedCorrectly = isPanelCorrectlyPlaced(draggedPanel);
-        // Recalcular mitigação para todos os painéis para refletir mudanças em tempo real
+        
+        // Recalcula posição de todos os outros painéis
         solarPanels.forEach(p => {
             if (p !== draggedPanel) {
                 p.isPlacedCorrectly = isPanelCorrectlyPlaced(p);
             }
         });
+        
+        // Recalcula mitigação em tempo real
         recalcMitigation();
-        // Garantir que a animação continue rodando durante o drag
+        
+        // Inicia animação se necessário
         if (!animationActive) {
             startHighlightAnimation();
         }
-        // Não chamar drawScene() diretamente - deixar o animationLoop cuidar disso
-        // Isso mantém a animação do highlight funcionando
-    } else if (bus && bus.isDragging) {
+    }
+    // Drag de autocarro
+    else if (bus && bus.isDragging) {
         bus.x = mousePos.x - bus.dragOffsetX;
         bus.y = mousePos.y - bus.dragOffsetY;
-        // Verificar se está na estrada durante o arrasto e atualizar mitigação
+        
+        // Verifica se está na estrada e atualiza mitigação
         const r = getRoadRect();
         const centerY = bus.y;
         const onRoad = centerY >= r.y1 && centerY <= r.y2;
+        
         if (onRoad !== bus.placedOnRoad) {
             bus.placedOnRoad = onRoad;
+            // Autocarro na estrada adiciona 15% de mitigação
             extraMitigation = (showBusCheckbox && showBusCheckbox.checked && bus && bus.placedOnRoad) ? 0.15 : 0.0;
             recalcMitigation();
         }
         drawScene();
-    } else if ((showPanelsCheckbox && showPanelsCheckbox.checked) || (showBusCheckbox && showBusCheckbox.checked)) {
+    }
+    // Hover sobre elementos interativos (muda cursor)
+    else if ((showPanelsCheckbox && showPanelsCheckbox.checked) || (showBusCheckbox && showBusCheckbox.checked)) {
         let overPanel = false;
         for (let panel of solarPanels) {
             if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
@@ -86,41 +125,61 @@ canvas.addEventListener('mousemove', (e) => {
     }
 });
 
+/**
+ * Evento: Mouse solto
+ * Finaliza o drag e atualiza o estado final dos elementos
+ */
 canvas.addEventListener('mouseup', () => {
+    // Finaliza drag de painel solar
     if (draggedPanel) {
         draggedPanel.isDragging = false;
         draggedPanel = null;
         canvas.style.cursor = 'default';
+        
+        // Remove highlight se não estiver fixado
         if (!highlightPinned) {
             highlightedBuildingIndex = null;
         }
+        
+        // Recalcula posição final de todos os painéis
         solarPanels.forEach(p => {
             p.isPlacedCorrectly = isPanelCorrectlyPlaced(p);
         });
+        
         recalcMitigation();
-        if (!animationActive) stopHighlightAnimationIfIdle();
         drawScene();
     }
 
+    // Finaliza drag de autocarro
     if (bus && bus.isDragging) {
         bus.isDragging = false;
         canvas.style.cursor = 'default';
+        
+        // Verifica se foi solto na estrada
         const r = getRoadRect();
         const centerY = bus.y;
         const onRoad = centerY >= r.y1 && centerY <= r.y2;
         bus.placedOnRoad = onRoad;
+        
         if (onRoad) {
+            // Alinha o autocarro à faixa e ativa movimento automático
             alignBusToLane(centerY);
             bus.autoDrive = true;
         } else {
             bus.autoDrive = false;
         }
+        
+        // Atualiza mitigação baseado na posição final
         extraMitigation = (showBusCheckbox && showBusCheckbox.checked && bus && bus.placedOnRoad) ? 0.15 : 0.0;
         recalcMitigation();
         drawScene();
     }
 });
 
+/**
+ * Evento: Mouse sai do canvas
+ * Cancela o drag se o mouse sair do canvas durante o arrasto
+ */
 canvas.addEventListener('mouseleave', () => {
     if (draggedPanel) {
         draggedPanel.isDragging = false;
@@ -129,9 +188,14 @@ canvas.addEventListener('mouseleave', () => {
     }
 });
 
+/**
+ * Evento: Checkbox de painéis solares
+ * Mostra/esconde painéis e reseta estado quando desmarcado
+ */
 if (showPanelsCheckbox) {
     showPanelsCheckbox.addEventListener('change', () => {
         if (!showPanelsCheckbox.checked) {
+            // Quando desmarcado, reseta tudo
             highlightedBuildingIndex = null;
             highlightPinned = false;
             solarPanels.forEach(p => p.isPlacedCorrectly = false);
@@ -141,26 +205,34 @@ if (showPanelsCheckbox) {
     });
 }
 
+/**
+ * Evento: Checkbox de autocarro
+ * Mostra/esconde autocarro e atualiza mitigação baseado na posição inicial
+ */
 if (showBusCheckbox) {
     showBusCheckbox.addEventListener('change', () => {
         if (!bus) return;
         bus.visible = showBusCheckbox.checked;
+        
         if (!bus.visible) {
+            // Quando desmarcado, reseta estado
             bus.isDragging = false;
             bus.placedOnRoad = false;
             bus.autoDrive = false;
             extraMitigation = 0.0;
             recalcMitigation();
         } else {
+            // Quando marcado, reposiciona e verifica se está na estrada
             bus.x = 120;
             bus.y = canvas.height - 90;
             bus.targetLaneY = bus.y;
             bus.autoDrive = false;
             bus.placedOnRoad = false;
-            // Verificar se o autocarro já está na estrada quando o checkbox é marcado
+            
             const r = getRoadRect();
             const centerY = bus.y;
             const onRoad = centerY >= r.y1 && centerY <= r.y2;
+            
             if (onRoad) {
                 bus.placedOnRoad = true;
                 extraMitigation = 0.15;
@@ -173,17 +245,26 @@ if (showBusCheckbox) {
     });
 }
 
+/**
+ * Evento: Click no canvas
+ * Permite fixar/destacar edifícios clicando nos painéis solares
+ */
 canvas.addEventListener('click', (e) => {
     if (!showPanelsCheckbox || !showPanelsCheckbox.checked) return;
+    
     const mousePos = getMousePos(e);
     let clickedPanel = null;
+    
+    // Encontra o painel clicado
     for (let panel of solarPanels) {
         if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
             clickedPanel = panel;
             break;
         }
     }
+    
     if (clickedPanel) {
+        // Toggle do highlight (fixa/desfixa)
         if (highlightedBuildingIndex === clickedPanel.buildingIndex && highlightPinned) {
             highlightedBuildingIndex = null;
             highlightPinned = false;
@@ -196,6 +277,10 @@ canvas.addEventListener('click', (e) => {
     }
 });
 
+/**
+ * Evento: Teclado
+ * Pressionar 'R' reseta todo o estado da animação
+ */
 document.addEventListener('keydown', (e) => {
     if ((e.key && e.key.toLowerCase() === 'r') || e.code === 'KeyR') {
         resetAnimationState();

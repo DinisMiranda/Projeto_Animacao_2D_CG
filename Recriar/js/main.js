@@ -1,12 +1,17 @@
-// ===== MÓDULO PRINCIPAL: INICIALIZAÇÃO =====
+/**
+ * INICIALIZAÇÃO DO PROJETO
+ * Este arquivo é executado por último e inicia todos os sistemas
+ */
 
-// Inicializa componentes que dependem do canvas
+// Chama a função initBus() que cria o objeto autocarro com posição e propriedades iniciais
 initBus();
+
+// Chama a função initSolarPanels() que cria um painel solar para cada edifício
 initSolarPanels();
 
-// Inicializa a mitigação (garante que totalMitigation comece com 0)
+// Chama a função recalcMitigation() para calcular a mitigação inicial (garante que começa em 0)
 recalcMitigation();
 
-// Inicia animação contínua
+// Solicita ao navegador que execute a função mainLoop no próximo frame de animação
+// Isso inicia o loop contínuo de animação
 requestAnimationFrame(mainLoop);
-

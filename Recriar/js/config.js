@@ -1,8 +1,16 @@
-// ===== MÓDULO: CONFIGURAÇÃO INICIAL =====
-// Define variáveis globais do canvas
+/**
+ * CONFIGURAÇÃO INICIAL
+ * Define as variáveis globais principais do canvas e controles
+ */
 
+// Obtém referência ao elemento canvas do HTML pelo ID 'canvas'
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const showPanelsCheckbox = document.getElementById('showPanels');
-const showBusCheckbox = document.getElementById('showBus');
 
+// Obtém o contexto 2D do canvas para poder desenhar nele
+const ctx = canvas.getContext('2d');
+
+// Obtém referência ao checkbox que controla a visibilidade dos painéis solares
+const showPanelsCheckbox = document.getElementById('showPanels');
+
+// Obtém referência ao checkbox que controla a visibilidade do autocarro
+const showBusCheckbox = document.getElementById('showBus');

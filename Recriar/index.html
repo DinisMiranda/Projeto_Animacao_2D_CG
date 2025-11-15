@@ -1,66 +1,65 @@
 <!DOCTYPE html>
-<!--
-Documento comentado por secções. Explicação linha-a-linha detalhada em:
-Recriar/explicacao_projeto.txt
--->
-<html lang="en">
+<html lang="pt">
 <head>
-    <!-- Configurações básicas do documento HTML -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    
-    <!-- Carregar estilos CSS externos -->
+    <title>Projeto Animação 2D CG - Simulação Ambiental</title>
     <link rel="stylesheet" href="animations.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Checkbox para mostrar painéis solares -->
+    <!-- Controles da aplicação -->
     <div id="checkbox-container">
         <label>
             <input type="checkbox" id="showPanels"> Mostrar Painéis Solares
         </label>
-            &nbsp;&nbsp;&nbsp;
-            <label>
-                <input type="checkbox" id="showBus"> Mostrar Autocarro
-            </label>
-            &nbsp;&nbsp;&nbsp;
-            <label>
-                <input type="checkbox" id="enableFaceDetection"> Deteção Facial
-            </label>
+        &nbsp;&nbsp;&nbsp;
+        <label>
+            <input type="checkbox" id="showBus"> Mostrar Autocarro
+        </label>
+        &nbsp;&nbsp;&nbsp;
+        <label>
+            <input type="checkbox" id="enableFaceDetection"> Deteção Facial
+        </label>
     </div>
     
     <!-- Indicador visual quando sorriso é detetado -->
     <div id="smile-indicator">😊 Sorriso Detetado! Transição Acelerada</div>
     
-    <!-- Preview visível da webcam -->
+    <!-- Preview da webcam para visualização -->
     <div id="webcam-preview">
         <div id="webcam-preview-label">Webcam</div>
         <video id="webcam-preview-video" autoplay playsinline></video>
     </div>
     
-    <!-- Vídeo oculto para webcam (usado para deteção) -->
+    <!-- Vídeo oculto usado para deteção facial -->
     <video id="webcam-video" autoplay playsinline></video>
     
-    <!-- Canvas onde será desenhada a cidade -->
+    <!-- Canvas principal onde a cidade é desenhada -->
     <canvas id="canvas" width="1100" height="600"></canvas>
     
-    <!-- Carregar ML5.js para deteção facial -->
+    <!-- Biblioteca ML5.js para deteção facial -->
     <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
     
-    <!-- Carregar módulos JavaScript na ordem correta -->
+    <!-- Módulos JavaScript (ordem de carregamento é importante) -->
+    <!-- 1. Configuração inicial -->
     <script src="js/config.js"></script>
+    <!-- 2. Elementos da cena -->
     <script src="js/buildings.js"></script>
     <script src="js/sky.js"></script>
     <script src="js/factories.js"></script>
+    <!-- 3. Sistemas de poluição e mitigação -->
     <script src="js/smoke.js"></script>
     <script src="js/cars.js"></script>
     <script src="js/mitigation.js"></script>
     <script src="js/trees.js"></script>
+    <!-- 4. Interatividade -->
     <script src="js/solarPanels.js"></script>
     <script src="js/faceDetection.js"></script>
+    <!-- 5. Animações e loops -->
     <script src="js/animations.js"></script>
     <script src="js/interactions.js"></script>
+    <!-- 6. Inicialização -->
     <script src="js/main.js"></script>
 </body>
 </html>
