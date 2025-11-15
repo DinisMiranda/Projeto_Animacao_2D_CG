@@ -14,6 +14,13 @@ function startHighlightAnimation() {
     if (!animationActive) {
         animationActive = true;
         animationStartTs = null;
+        // Usar o timestamp atual do mainLoop se disponível, ou 0 para ser inicializado no primeiro frame
+        // Isso evita saltos grandes no delta time quando o loop é iniciado
+        if (lastFrameTs > 0) {
+            animationLastFrameTs = lastFrameTs;
+        } else {
+            animationLastFrameTs = 0;
+        }
         requestAnimationFrame(animationLoop);
     }
 }
@@ -25,10 +32,22 @@ function stopHighlightAnimationIfIdle() {
 function animationLoop(ts) {
     if (!animationStartTime) animationStartTime = ts;
     if (animationStartTs === null) animationStartTs = ts;
-    if (!animationLastFrameTs) animationLastFrameTs = ts;
+    
+    // Inicializar animationLastFrameTs no primeiro frame para evitar saltos grandes
+    // Se estiver zerado ou muito antigo, usar o timestamp atual
+    // IMPORTANTE: Se a diferença for muito grande, resetar para evitar aceleração
+    if (!animationLastFrameTs || animationLastFrameTs === 0) {
+        animationLastFrameTs = ts;
+    } else if ((ts - animationLastFrameTs) > 50) {
+        // Se passou mais de 50ms desde o último frame, resetar para evitar aceleração
+        animationLastFrameTs = ts - 16.67; // Usar um delta time padrão de 1 frame
+    }
     
     // Calcular delta time para animações
-    const dtMs = Math.min(50, ts - animationLastFrameTs);
+    // Limitar o delta time máximo para evitar saltos quando o loop é reiniciado
+    // Usar um limite mais conservador (16.67ms = 1 frame a 60fps) para evitar aceleração
+    const rawDt = ts - animationLastFrameTs;
+    const dtMs = Math.min(16.67, Math.max(0, rawDt));
     animationLastFrameTs = ts;
     
     const elapsed = ts - animationStartTs;
@@ -41,6 +60,11 @@ function animationLoop(ts) {
     // Atualizar spawn de fumo (apenas atualiza estado, não desenha)
     spawnFactorySmoke(dtMs);
     updateBus(dtMs);
+    
+    // Atualizar crescimento gradual das plantas
+    if (typeof updatePlantGrowth !== 'undefined') {
+        updatePlantGrowth(dtMs);
+    }
     
     // Atualizar boost de sorriso (deteção facial)
     if (typeof updateSmileBoost !== 'undefined') {
@@ -76,8 +100,13 @@ function drawScene() {
     drawFactories();
     drawGround();
     drawRoad();
+    drawPlants(); // Desenha jardins das fábricas (crescem conforme poluição diminui)
     if (bus) drawBus(bus);
     drawBuildings();
+    // Desenhar árvores entre casas DEPOIS dos edifícios para ficarem na frente
+    if (typeof drawTreesBetweenHousesFront !== 'undefined') {
+        drawTreesBetweenHousesFront();
+    }
 
     if (showPanelsCheckbox && showPanelsCheckbox.checked && highlightedBuildingIndex !== null) {
         const b = buildings[highlightedBuildingIndex];
@@ -112,10 +141,20 @@ function mainLoop(ts) {
     spawnFactorySmoke(dtMs);
     updateBus(dtMs);
     
-    // Atualizar boost de sorriso (deteção facial)
-    if (typeof updateSmileBoost !== 'undefined') {
-        updateSmileBoost(dtMs);
+    // Só atualizar animações se o animationLoop NÃO estiver ativo
+    // Isso evita duplicação de atualizações quando ambos os loops estão rodando
+    if (!animationActive) {
+        // Atualizar crescimento gradual das plantas
+        if (typeof updatePlantGrowth !== 'undefined') {
+            updatePlantGrowth(dtMs);
+        }
+        
+        // Atualizar boost de sorriso (deteção facial)
+        if (typeof updateSmileBoost !== 'undefined') {
+            updateSmileBoost(dtMs);
+        }
     }
+    
     drawScene();
     updateAndDrawCars(dtMs, ts);
     updateAndDrawSmoke(dtMs);
@@ -144,6 +183,9 @@ function resetAnimationState() {
     }
     if (typeof resetSolarPanels === 'function') {
         resetSolarPanels();
+    }
+    if (typeof resetPlants === 'function') {
+        resetPlants();
     }
     if (typeof initBus === 'function') {
         initBus();

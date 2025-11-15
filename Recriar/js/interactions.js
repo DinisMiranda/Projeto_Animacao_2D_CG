@@ -63,6 +63,15 @@ canvas.addEventListener('mousemove', (e) => {
     } else if (bus && bus.isDragging) {
         bus.x = mousePos.x - bus.dragOffsetX;
         bus.y = mousePos.y - bus.dragOffsetY;
+        // Verificar se está na estrada durante o arrasto e atualizar mitigação
+        const r = getRoadRect();
+        const centerY = bus.y;
+        const onRoad = centerY >= r.y1 && centerY <= r.y2;
+        if (onRoad !== bus.placedOnRoad) {
+            bus.placedOnRoad = onRoad;
+            extraMitigation = (showBusCheckbox && showBusCheckbox.checked && bus && bus.placedOnRoad) ? 0.15 : 0.0;
+            recalcMitigation();
+        }
         drawScene();
     } else if ((showPanelsCheckbox && showPanelsCheckbox.checked) || (showBusCheckbox && showBusCheckbox.checked)) {
         let overPanel = false;
@@ -148,6 +157,17 @@ if (showBusCheckbox) {
             bus.targetLaneY = bus.y;
             bus.autoDrive = false;
             bus.placedOnRoad = false;
+            // Verificar se o autocarro já está na estrada quando o checkbox é marcado
+            const r = getRoadRect();
+            const centerY = bus.y;
+            const onRoad = centerY >= r.y1 && centerY <= r.y2;
+            if (onRoad) {
+                bus.placedOnRoad = true;
+                extraMitigation = 0.15;
+            } else {
+                extraMitigation = 0.0;
+            }
+            recalcMitigation();
         }
         drawScene();
     });
