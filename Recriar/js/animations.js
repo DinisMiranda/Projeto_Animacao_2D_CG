@@ -93,6 +93,11 @@ function animationLoop(ts) {
     // Atualiza o ciclo dia/noite (muda a cor do céu)
     updateDayNightCycle(elapsedTime);
     
+    // Atualiza as posições das nuvens (movimento contínuo)
+    if (typeof updateClouds !== 'undefined') {
+        updateClouds(dtMs);
+    }
+    
     // Spawna novo fumo das fábricas baseado no delta time
     spawnFactorySmoke(dtMs);
     
@@ -218,6 +223,27 @@ function drawScene() {
         }
     }
 
+    // === DESENHA HIGHLIGHT DA ZONA DE RECICLAGEM ===
+    // Verifica se deve desenhar a zona verde onde o contentor deve ser colocado
+    // Condições: checkbox de reciclagem marcado E há um contentor sendo arrastado
+    // A zona verde aparece entre o segundo e terceiro edifício
+    if (showRecyclingCheckbox && showRecyclingCheckbox.checked && draggedBin && typeof drawRecyclingZoneHighlight !== 'undefined') {
+        // Desenha a zona verde de highlight entre o segundo e terceiro edifício
+        // dashOffset * 16 é o offset da linha tracejada (cria efeito de movimento)
+        drawRecyclingZoneHighlight(dashOffset * 16);
+    }
+
+    // === DESENHA CONTENTORES DE RECICLAGEM ===
+    // Desenha os contentores de reciclagem antes dos painéis solares
+    // Verifica se o checkbox de reciclagem está marcado
+    if (showRecyclingCheckbox && showRecyclingCheckbox.checked && typeof recyclingBins !== 'undefined') {
+        // Itera sobre cada contentor no array
+        recyclingBins.forEach(bin => {
+            // Desenha cada contentor de reciclagem
+            drawRecyclingBin(bin);
+        });
+    }
+
     // === DESENHA PAINÉIS SOLARES ===
     // Desenha os painéis solares por último para ficarem visíveis sobre tudo
     // Verifica se o checkbox de painéis está marcado
@@ -270,6 +296,11 @@ function mainLoop(ts) {
     
     // Atualiza o ciclo dia/noite (muda a cor do céu conforme o tempo)
     updateDayNightCycle(elapsedTime);
+    
+    // Atualiza as posições das nuvens (movimento contínuo)
+    if (typeof updateClouds !== 'undefined') {
+        updateClouds(dtMs);
+    }
     
     // Spawna novo fumo das fábricas baseado no delta time
     spawnFactorySmoke(dtMs);
@@ -330,6 +361,9 @@ function resetAnimationState() {
     if (showPanelsCheckbox) {
         showPanelsCheckbox.checked = false;
     }
+    if (showRecyclingCheckbox) {
+        showRecyclingCheckbox.checked = false;
+    }
     if (showBusCheckbox) {
         showBusCheckbox.checked = false;
     }
@@ -343,6 +377,9 @@ function resetAnimationState() {
     }
     if (typeof resetSolarPanels === 'function') {
         resetSolarPanels();
+    }
+    if (typeof resetRecyclingBins === 'function') {
+        resetRecyclingBins();
     }
     if (typeof resetPlants === 'function') {
         resetPlants();

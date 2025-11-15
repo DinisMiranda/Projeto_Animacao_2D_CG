@@ -14,3 +14,6 @@ const showPanelsCheckbox = document.getElementById('showPanels');
 
 // Obtém referência ao checkbox que controla a visibilidade do autocarro
 const showBusCheckbox = document.getElementById('showBus');
+
+// Obtém referência ao checkbox que controla a visibilidade dos contentores de reciclagem
+const showRecyclingCheckbox = document.getElementById('showRecycling');

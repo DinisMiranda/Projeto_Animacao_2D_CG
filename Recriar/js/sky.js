@@ -1,12 +1,13 @@
 // ===== MÓDULO: CÉU, SOL, NUVENS, LUA E ESTRELAS =====
 
-// Array com posições e escalas das nuvens
+// Array com posições, escalas e velocidades das nuvens
+// Cada nuvem tem: x (posição X), y (posição Y), s (escala), vx (velocidade horizontal)
 const cloudPositions = [
-    {x: 140, y: 100, s: 1.0},
-    {x: 360, y: 120, s: 0.95},
-    {x: 560, y: 105, s: 1.05},
-    {x: 760, y: 130, s: 1.0},
-    {x: 980, y: 145, s: 0.9}
+    {x: 140, y: 100, s: 1.0, vx: 0.25},   // Nuvem 1: velocidade 0.25 pixels/frame
+    {x: 360, y: 120, s: 0.95, vx: 0.20},  // Nuvem 2: velocidade 0.20 pixels/frame (mais lenta)
+    {x: 560, y: 105, s: 1.05, vx: 0.28},  // Nuvem 3: velocidade 0.28 pixels/frame (mais rápida)
+    {x: 760, y: 130, s: 1.0, vx: 0.22},   // Nuvem 4: velocidade 0.22 pixels/frame
+    {x: 980, y: 145, s: 0.9, vx: 0.21}    // Nuvem 5: velocidade 0.21 pixels/frame
 ];
 
 // Array com posições das estrelas (geradas aleatoriamente)
@@ -423,6 +424,12 @@ function drawStars() {
     ctx.restore();
 }
 
+/**
+ * Desenha uma nuvem fofa e realista usando múltiplas camadas de círculos
+ * @param {number} x - Posição X da nuvem
+ * @param {number} y - Posição Y da nuvem
+ * @param {number} scale - Escala da nuvem
+ */
 function drawCloud(x, y, scale) {
     const nightFactor = getNightFactor();
     
@@ -441,35 +448,142 @@ function drawCloud(x, y, scale) {
     // Aplicar alpha às nuvens
     ctx.globalAlpha = cloudAlpha;
 
-    ctx.shadowColor = 'rgba(255,255,255,0.6)';
-    ctx.shadowBlur = 12;
+    // === CAMADA BASE DA NUVEM (círculos principais) ===
+    // Sombra suave para dar profundidade
+    ctx.shadowColor = 'rgba(200, 200, 200, 0.3)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
 
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    // Cor branca principal da nuvem
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    
+    // Desenha cada círculo da base separadamente para evitar problemas de composição
+    // Círculo central (maior)
     ctx.beginPath();
-    ctx.arc(0, 0, 20, 0, Math.PI * 2);
-    ctx.arc(28, -2, 18, 0, Math.PI * 2);
-    ctx.arc(52, 2, 22, 0, Math.PI * 2);
-    ctx.arc(18, -14, 16, 0, Math.PI * 2);
-    ctx.arc(40, -16, 15, 0, Math.PI * 2);
-    ctx.closePath();
+    ctx.arc(0, 0, 22, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Círculo direito
+    ctx.beginPath();
+    ctx.arc(30, -3, 20, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Círculo direito extremo
+    ctx.beginPath();
+    ctx.arc(55, 0, 24, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Círculo esquerdo superior
+    ctx.beginPath();
+    ctx.arc(15, -18, 18, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Círculo direito superior
+    ctx.beginPath();
+    ctx.arc(42, -20, 17, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Círculo esquerdo
+    ctx.beginPath();
+    ctx.arc(-25, 2, 19, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Círculo inferior esquerdo
+    ctx.beginPath();
+    ctx.arc(10, 15, 16, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Círculo inferior direito
+    ctx.beginPath();
+    ctx.arc(35, 12, 15, 0, Math.PI * 2);
     ctx.fill();
 
+    // Remove sombra para as camadas seguintes
     ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    // === CAMADA DE BRILHO (círculos menores e mais claros) ===
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    
+    // Brilho superior esquerdo
     ctx.beginPath();
-    ctx.arc(20, -14, 10, 0, Math.PI * 2);
-    ctx.arc(38, -16, 9, 0, Math.PI * 2);
-    ctx.closePath();
+    ctx.arc(18, -16, 12, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Brilho superior direito
+    ctx.beginPath();
+    ctx.arc(40, -18, 11, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Brilho central
+    ctx.beginPath();
+    ctx.arc(28, -8, 10, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Brilho esquerdo
+    ctx.beginPath();
+    ctx.arc(-8, -5, 9, 0, Math.PI * 2);
+    ctx.fill();
+
+    // === CAMADA DE DESTAQUE (pontos de luz mais intensos) ===
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    
+    // Destaque superior esquerdo
+    ctx.beginPath();
+    ctx.arc(20, -17, 8, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Destaque superior direito
+    ctx.beginPath();
+    ctx.arc(42, -19, 7, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Destaque central
+    ctx.beginPath();
+    ctx.arc(30, -10, 6, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.globalAlpha = 1;
     ctx.restore();
 }
 
+/**
+ * Atualiza as posições das nuvens para criar movimento contínuo
+ * As nuvens se movem da esquerda para a direita e reaparecem do lado esquerdo
+ * @param {number} dtMs - Delta time em milissegundos desde o último frame
+ */
+function updateClouds(dtMs) {
+    // Converte delta time para um fator de movimento (normaliza para 60fps)
+    // dtMs / 16.67 converte milissegundos para frames (assumindo 60fps)
+    const frameFactor = dtMs / 16.67;
+    
+    // Largura do canvas para detectar quando a nuvem sai da tela
+    const canvasWidth = canvas.width;
+    
+    // Atualiza cada nuvem
+    cloudPositions.forEach(cloud => {
+        // Move a nuvem para a direita baseado na sua velocidade
+        // Multiplica pela escala de frames para movimento suave independente do FPS
+        cloud.x += cloud.vx * frameFactor;
+        
+        // Se a nuvem saiu completamente da tela pela direita, reposiciona à esquerda
+        // Considera a largura aproximada da nuvem (cerca de 80 pixels com escala)
+        const cloudWidth = 80 * cloud.s;
+        if (cloud.x > canvasWidth + cloudWidth) {
+            // Reposiciona a nuvem do lado esquerdo (um pouco antes de aparecer)
+            cloud.x = -cloudWidth;
+        }
+    });
+}
+
+/**
+ * Desenha todas as nuvens na tela
+ * As nuvens são desenhadas individualmente com sua própria transição de alpha
+ */
 function drawAllClouds() {
-    // As nuvens são desenhadas individualmente com sua própria transição de alpha
-    // Não precisamos verificar aqui, cada nuvem verifica seu próprio alpha
+    // Itera sobre cada nuvem e a desenha
     cloudPositions.forEach(c => drawCloud(c.x, c.y, c.s));
 }
 

@@ -9,6 +9,11 @@ initBus();
 // Chama a função initSolarPanels() que cria um painel solar para cada edifício
 initSolarPanels();
 
+// Chama a função initRecyclingBins() que cria um contentor de reciclagem para cada edifício
+if (typeof initRecyclingBins === 'function') {
+    initRecyclingBins();
+}
+
 // Chama a função recalcMitigation() para calcular a mitigação inicial (garante que começa em 0)
 recalcMitigation();
 

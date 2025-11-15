@@ -20,15 +20,15 @@ const growthTransitionSpeed = 0.035;     // Velocidade de transição (quanto ma
 
 /**
  * Calcula o tamanho desejado das plantas baseado na mitigação
- * totalMitigation varia de 0 a 0.4, normalizado para 0-1
+ * totalMitigation varia de 0 a 0.5, normalizado para 0-1
  * Retorna um valor entre 0.1 (mínimo) e 1.0 (máximo)
  */
 function getTargetPlantGrowthFactor() {
-    // Normaliza totalMitigation (0-0.4) para (0-1) com pequena tolerância
-    const normalizedMitigation = Math.min(1.0, (totalMitigation + 0.0001) / 0.4);
+    // Normaliza totalMitigation (0-0.5) para (0-1) com pequena tolerância
+    const normalizedMitigation = Math.min(1.0, (totalMitigation + 0.0001) / 0.5);
     
     // Se estiver muito próximo do máximo, retorna 1.0 diretamente
-    if (totalMitigation >= 0.399) {
+    if (totalMitigation >= 0.499) {
         return 1.0;
     }
     

@@ -47,6 +47,20 @@ canvas.addEventListener('mousedown', (e) => {
         }
     }
 
+    // Verifica se clicou em um contentor de reciclagem
+    if (showRecyclingCheckbox && showRecyclingCheckbox.checked && typeof recyclingBins !== 'undefined') {
+        for (let bin of recyclingBins) {
+            if (isPointInBin(mousePos.x, mousePos.y, bin)) {
+                draggedBin = bin;
+                bin.isDragging = true;
+                bin.dragOffsetX = mousePos.x - bin.x;
+                bin.dragOffsetY = mousePos.y - bin.y;
+                canvas.style.cursor = 'grabbing';
+                return;
+            }
+        }
+    }
+
     // Verifica se clicou no autocarro
     if (showBusCheckbox && showBusCheckbox.checked && bus && isPointInBus(mousePos.x, mousePos.y, bus)) {
         bus.isDragging = true;
@@ -93,6 +107,19 @@ canvas.addEventListener('mousemove', (e) => {
             startHighlightAnimation();
         }
     }
+    // Drag de contentor de reciclagem
+    else if (draggedBin && draggedBin.isDragging) {
+        draggedBin.x = mousePos.x - draggedBin.dragOffsetX;
+        draggedBin.y = mousePos.y - draggedBin.dragOffsetY;
+        draggedBin.isPlacedCorrectly = isBinCorrectlyPlaced(draggedBin);
+        recyclingBins.forEach(b => {
+            if (b !== draggedBin) {
+                b.isPlacedCorrectly = isBinCorrectlyPlaced(b);
+            }
+        });
+        recalcMitigation();
+        drawScene();
+    }
     // Drag de autocarro
     else if (bus && bus.isDragging) {
         bus.x = mousePos.x - bus.dragOffsetX;
@@ -112,7 +139,9 @@ canvas.addEventListener('mousemove', (e) => {
         drawScene();
     }
     // Hover sobre elementos interativos (muda cursor)
-    else if ((showPanelsCheckbox && showPanelsCheckbox.checked) || (showBusCheckbox && showBusCheckbox.checked)) {
+    else if ((showPanelsCheckbox && showPanelsCheckbox.checked) || 
+             (showRecyclingCheckbox && showRecyclingCheckbox.checked) || 
+             (showBusCheckbox && showBusCheckbox.checked)) {
         let overPanel = false;
         for (let panel of solarPanels) {
             if (isPointInPanel(mousePos.x, mousePos.y, panel)) {
@@ -120,8 +149,17 @@ canvas.addEventListener('mousemove', (e) => {
                 break;
             }
         }
+        let overBin = false;
+        if (typeof recyclingBins !== 'undefined') {
+            for (let bin of recyclingBins) {
+                if (isPointInBin(mousePos.x, mousePos.y, bin)) {
+                    overBin = true;
+                    break;
+                }
+            }
+        }
         const overBus = isPointInBus(mousePos.x, mousePos.y, bus);
-        canvas.style.cursor = (overPanel || overBus) ? 'grab' : 'default';
+        canvas.style.cursor = (overPanel || overBin || overBus) ? 'grab' : 'default';
     }
 });
 
@@ -146,6 +184,18 @@ canvas.addEventListener('mouseup', () => {
             p.isPlacedCorrectly = isPanelCorrectlyPlaced(p);
         });
         
+        recalcMitigation();
+        drawScene();
+    }
+
+    // Finaliza drag de contentor de reciclagem
+    if (draggedBin) {
+        draggedBin.isDragging = false;
+        draggedBin = null;
+        canvas.style.cursor = 'default';
+        recyclingBins.forEach(b => {
+            b.isPlacedCorrectly = isBinCorrectlyPlaced(b);
+        });
         recalcMitigation();
         drawScene();
     }
@@ -199,6 +249,21 @@ if (showPanelsCheckbox) {
             highlightedBuildingIndex = null;
             highlightPinned = false;
             solarPanels.forEach(p => p.isPlacedCorrectly = false);
+            recalcMitigation();
+        }
+        drawScene();
+    });
+}
+
+/**
+ * Evento: Checkbox de reciclagem
+ * Mostra/esconde contentores de reciclagem e reseta estado quando desmarcado
+ */
+if (showRecyclingCheckbox) {
+    showRecyclingCheckbox.addEventListener('change', () => {
+        if (!showRecyclingCheckbox.checked && typeof recyclingBins !== 'undefined') {
+            // Quando desmarcado, reseta tudo
+            recyclingBins.forEach(b => b.isPlacedCorrectly = false);
             recalcMitigation();
         }
         drawScene();
