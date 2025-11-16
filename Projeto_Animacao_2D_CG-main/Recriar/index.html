@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto Animação 2D CG - Simulação Ambiental</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="animations.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- Controles -->
+    <div id="checkbox-container">
+        <label><input type="checkbox" id="showPanels"> Mostrar Painéis Solares</label>
+        &nbsp;&nbsp;&nbsp;
+        <label><input type="checkbox" id="showBus"> Mostrar Autocarro</label>
+        &nbsp;&nbsp;&nbsp;
+        <label><input type="checkbox" id="showRecycling"> Mostrar Reciclagem</label>
+        &nbsp;&nbsp;&nbsp;
+        <label><input type="checkbox" id="enableHandDetection"> Deteção de Mão</label>
+    </div>
+
+    <!-- Webcam Preview -->
+    <div id="webcam-preview">
+        <div id="webcam-preview-label">Webcam</div>
+        <video id="webcam-preview-video" autoplay playsinline></video>
+    </div>
+
+    <!-- Vídeo oculto para deteção -->
+    <video id="webcam-video" autoplay playsinline style="display:none;"></video>
+
+    <!-- Canvas Principal -->
+    <canvas id="canvas" width="1100" height="600"></canvas>
+
+
+    <!-- ====================== -->
+    <!-- ML5 LOADER COM FALLBACKS -->
+    <!-- ====================== -->
+    <script>
+        function loadML5WithFallbacks() {
+            return new Promise((resolve, reject) => {
+                const urls = [
+                    "https://unpkg.com/ml5@0.21.0/dist/ml5.min.js",
+                    "https://cdn.jsdelivr.net/npm/ml5@0.21.0/dist/ml5.min.js",
+                    "https://unpkg.com/ml5@0.22.2/dist/ml5.min.js",
+                    "https://cdn.jsdelivr.net/npm/ml5@0.22.2/dist/ml5.min.js",
+                    "https://unpkg.com/ml5@latest/dist/ml5.min.js",
+                    "https://cdn.jsdelivr.net/npm/ml5@latest/dist/ml5.min.js"
+                ];
+
+                let i = 0;
+
+                function tryNext() {
+                    if (i >= urls.length) {
+                        reject("Falha ao carregar ML5.js");
+                        return;
+                    }
+
+                    const script = document.createElement("script");
+                    script.src = urls[i];
+                    console.log("Tentando ML5:", urls[i]);
+
+                    script.onload = () => {
+                        setTimeout(() => {
+                            if (window.ml5) {
+                                console.log("ML5 carregado de:", urls[i]);
+                                resolve();
+                            } else {
+                                console.warn("ML5 carregou mas não ficou disponível:", urls[i]);
+                                i++; tryNext();
+                            }
+                        }, 400);
+                    };
+
+                    script.onerror = () => {
+                        console.warn("Erro a carregar:", urls[i]);
+                        i++; tryNext();
+                    };
+
+                    document.head.appendChild(script);
+                }
+
+                tryNext();
+            });
+        }
+    </script>
+
+    <!-- ====================== -->
+    <!-- LOADING DOS OUTROS SCRIPTS -->
+    <!-- ====================== -->
+    <script>
+        function loadOtherScripts() {
+            const coreScripts = [
+                "js/config.js",
+                "js/buildings.js",
+                "js/sky.js",
+                "js/factories.js",
+                "js/smoke.js",
+                "js/cars.js",
+                "js/mitigation.js",
+                "js/trees.js",
+                "js/solarPanels.js",
+                "js/recycling.js"
+            ];
+
+            let index = 0;
+
+            function loadNext() {
+                if (index < coreScripts.length) {
+                    const s = document.createElement("script");
+                    s.src = coreScripts[index];
+
+                    s.onload = () => {
+                        console.log("Carregado:", coreScripts[index]);
+                        index++;
+                        loadNext();
+                    };
+
+                    s.onerror = () => {
+                        console.error("Erro ao carregar:", coreScripts[index]);
+                        index++;
+                        loadNext();
+                    };
+
+                    document.body.appendChild(s);
+                    return;
+                }
+
+                // Scripts finais SEM dependências
+                const finalScripts = ["js/animations.js", "js/interactions.js", "js/main.js"];
+
+                let finalIndex = 0;
+
+                function loadFinal() {
+                    if (finalIndex < finalScripts.length) {
+                        const s = document.createElement("script");
+                        s.src = finalScripts[finalIndex];
+
+                        s.onload = () => {
+                            console.log("Carregado:", finalScripts[finalIndex]);
+                            finalIndex++;
+                            loadFinal();
+                        };
+
+                        s.onerror = () => {
+                            console.error("Erro ao carregar:", finalScripts[finalIndex]);
+                            finalIndex++;
+                            loadFinal();
+                        };
+
+                        document.body.appendChild(s);
+                        return;
+                    }
+
+                    // Hand detection só se ml5 existir (carregado após main.js para garantir que canvas está definido)
+                    if (window.ml5) {
+                        const hand = document.createElement("script");
+                        hand.src = "js/handDetection.js";
+                        hand.onload = () => console.log("handDetection.js carregado");
+                        hand.onerror = () => console.error("Erro ao carregar handDetection.js");
+                        document.body.appendChild(hand);
+                    } else {
+                        console.warn("ML5 não disponível - hand detection desativada");
+                    }
+                }
+
+                loadFinal();
+            }
+
+            loadNext();
+        }
+
+
+        // Processo principal de load
+        loadML5WithFallbacks()
+            .then(() => {
+                console.log("ML5 OK — iniciando scripts");
+                loadOtherScripts();
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Não foi possível carregar ML5.js.\nA deteção de mão ficará desativada.");
+                loadOtherScripts();
+            });
+    </script>
+
+</body>
+</html>
