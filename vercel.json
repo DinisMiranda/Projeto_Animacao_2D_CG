@@ -1,0 +1,14 @@
+{
+  "buildCommand": null,
+  "outputDirectory": "Projeto_Animacao_2D_CG-main/Recriar",
+  "devCommand": null,
+  "installCommand": null,
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+
